@@ -1,0 +1,89 @@
+name: scrapeflow
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks: [app_net]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  read_only: true
+  tmpfs: ["/tmp:size=256m,mode=1777"]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scrapeflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scrapeflow}
+      POSTGRES_DB: ${POSTGRES_DB:-scrapeflow}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scrapeflow} -d ${POSTGRES_DB:-scrapeflow}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app_net]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app_net]
+
+  api:
+    <<: *backend
+    command: ["uvicorn", "apps.api.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    ports:
+      - "8000:8000"
+    mem_limit: 512m
+    cpus: 1.0
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=4"]
+    mem_limit: 1g
+    cpus: 2.0
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "apps.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    mem_limit: 256m
+    cpus: 0.5
+
+  selenium:
+    image: selenium/standalone-chrome:4.25.0
+    shm_size: 2g
+    environment:
+      SE_NODE_MAX_SESSIONS: "4"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+      SE_NODE_SESSION_TIMEOUT: "300"
+      SE_START_XVFB: "false"
+      SE_START_VNC: "false"
+    ports:
+      - "127.0.0.1:4444:4444"
+    mem_limit: 3g
+    security_opt: ["no-new-privileges:true"]
+    networks: [app_net]
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  app_net:
+    driver: bridge

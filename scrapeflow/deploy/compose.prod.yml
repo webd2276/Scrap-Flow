@@ -1,0 +1,101 @@
+name: scrapeflow-prod
+
+x-backend: &backend
+  image: ${SCRAPEFLOW_IMAGE:-scrapeflow:latest}
+  env_file: .env
+  restart: always
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks: [app_net]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  read_only: true
+  tmpfs: ["/tmp:size=256m,mode=1777"]
+  logging:
+    driver: json-file
+    options: {max-size: "20m", max-file: "5"}
+
+services:
+  api:
+    <<: *backend
+    command: ["uvicorn", "apps.api.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers"]
+    expose: ["8000"]
+    mem_limit: 1g
+    cpus: 2.0
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=8", "--max-tasks-per-child=100"]
+    mem_limit: 2g
+    cpus: 4.0
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "apps.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    mem_limit: 256m
+    cpus: 0.5
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app_net]
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [app_net]
+    restart: always
+
+  selenium:
+    image: selenium/standalone-chrome:4.25.0
+    shm_size: 2g
+    environment:
+      SE_NODE_MAX_SESSIONS: "8"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+      SE_NODE_SESSION_TIMEOUT: "300"
+      SE_START_XVFB: "false"
+      SE_START_VNC: "false"
+    mem_limit: 6g
+    security_opt: ["no-new-privileges:true"]
+    networks: [app_net]
+    restart: always
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    networks: [app_net]
+    restart: always
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app_net:
+    driver: bridge

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen --dev
+      - name: Lint
+        run: |
+          uv run ruff check apps packages tests
+          uv run ruff format --check apps packages tests
+      - name: Type check
+        run: uv run mypy apps packages
+      - name: Unit tests
+        run: uv run pytest tests/unit --cov --cov-report=term-missing -q
+      - name: Dependency audit
+        run: uv run pip-audit
+
+  integration:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: scrapeflow
+          POSTGRES_PASSWORD: scrapeflow
+          POSTGRES_DB: scrapeflow_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U scrapeflow -d scrapeflow_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://scrapeflow:scrapeflow@localhost:5432/scrapeflow_test
+      TEST_REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - run: uv python install 3.12
+      - run: uv sync --frozen --dev
+      - run: uv run pytest tests/integration -q
+
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t scrapeflow:ci .

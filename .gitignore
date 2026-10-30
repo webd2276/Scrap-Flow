@@ -1,0 +1,12 @@
+# Tooling/agent state
+.opencode/
+.vscode/
+
+# Local secrets kept from the legacy MVP
+scrapeflow/.env.legacy
+
+# Python/Node caches
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
