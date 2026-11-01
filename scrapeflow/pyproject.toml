@@ -29,7 +29,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "fakeredis>=2.26,<3",
     "mypy>=1.13,<2",
     "pip-audit>=2.7,<3",
     "pytest>=9.0.3,<10",
@@ -37,8 +36,6 @@ dev = [
     "pytest-cov>=5,<8",
     "respx>=0.21,<1",
     "ruff>=0.7,<1",
-    "testcontainers[postgres,redis]>=4.8,<5",
-    "types-redis",
 ]
 e2e = [
     "locust>=2.32,<3",
@@ -81,11 +78,12 @@ show_error_codes = true
 exclude = ["migrations/versions"]
 
 [[tool.mypy.overrides]]
-module = ["asyncpg", "boto3.*", "botocore.*", "celery.*", "croniter.*", "stripe.*", "testcontainers.*", "fakeredis.*", "locust.*"]
+module = ["asyncpg", "boto3.*", "botocore.*", "celery.*", "croniter.*", "stripe.*", "locust.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra --strict-markers"

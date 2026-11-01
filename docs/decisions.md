@@ -65,3 +65,28 @@ authority for pinned Postgres 16/Redis 7/Grid.
 ## D-014 — Strict startup settings, no secret defaults
 Alternatives: development defaults.
 Reason: fail fast, never ship placeholder credentials. Tests inject `Settings` directly.
+
+## D-015 — JWT signing key rotation via `kid`
+Alternatives: single secret with no identifier.
+Reason: `kid` lets a new secret become active while old access tokens still verify.
+`JWT_ACTIVE_KID` names the signing key; `JWT_PREVIOUS_KEYS` is a JSON map of
+retired kid → secret. The keyring is validated at startup.
+
+## D-016 — Refresh-token reuse revokes the whole family
+Alternatives: return 401 for the replayed token only.
+Reason: a rotated token presented again indicates theft; leaving the newly
+issued token valid lets attacker and victim both keep sessions. Reuse revokes
+every active refresh token for that user.
+
+## D-017 — API keys may only mint a subset of their own scopes
+Alternatives: any `keys:manage` key can mint `*`.
+Reason: otherwise a limited key escalates itself to billing/audit/admin. JWTs
+for owners/admins carry `*`; API keys are checked against their held scopes.
+
+## D-018 — One-shot migration service; trusted proxy only on internal network
+Alternatives: run Alembic in the API command or manually.
+Reason: a dedicated `migrate` service makes deploy ordering explicit and avoids
+replica races. In production the API is not published; Caddy is the only
+ingress, so uvicorn may trust `X-Forwarded-For` from the compose network for
+per-IP limits. The development compose publishes the API directly and does not
+trust forwarded headers.

@@ -13,7 +13,7 @@ RUN apt-get update \
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 
 WORKDIR /srv
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock alembic.ini ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY apps ./apps

@@ -6,6 +6,8 @@ defaults: a missing or short secret is a startup error, not a runtime surprise.
 
 from __future__ import annotations
 
+import json
+import re
 from functools import lru_cache
 from typing import Literal
 
@@ -39,6 +41,23 @@ class Settings(BaseSettings):
 
     request_id_header: str = "X-Request-ID"
     readiness_timeout_seconds: float = Field(default=2.0, gt=0, le=10)
+
+    database_pool_size: int = Field(default=10, ge=1, le=50)
+    database_max_overflow: int = Field(default=10, ge=0, le=50)
+
+    jwt_access_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    jwt_refresh_ttl_days: int = Field(default=30, ge=1, le=90)
+    jwt_active_kid: str = Field(default="primary", pattern=r"^[A-Za-z0-9_-]{1,16}$")
+    jwt_previous_keys: SecretStr | None = None
+    password_min_length: int = Field(default=12, ge=8, le=128)
+    tos_version: str = "2026-10-30"
+
+    rate_limit_org_per_minute: int = Field(default=120, ge=1, le=10000)
+    rate_limit_org_burst: int = Field(default=120, ge=1, le=10000)
+    rate_limit_ip_per_minute: int = Field(default=60, ge=1, le=10000)
+    rate_limit_ip_burst: int = Field(default=60, ge=1, le=10000)
+    rate_limit_auth_per_minute: int = Field(default=10, ge=1, le=1000)
+    rate_limit_auth_burst: int = Field(default=10, ge=1, le=1000)
 
     selenium_remote_url: str | None = None
     artifacts_endpoint: str | None = None
@@ -90,6 +109,39 @@ class Settings(BaseSettings):
         ):
             raise ValueError("BILLING_ENABLED requires STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET")
         return self
+
+    @model_validator(mode="after")
+    def _validate_jwt_keyring(self) -> Settings:
+        """Reject malformed rotation keys at startup, not on first request."""
+        previous = self.jwt_previous_key_map
+        if self.jwt_active_kid in previous:
+            raise ValueError("JWT_ACTIVE_KID must not also appear in JWT_PREVIOUS_KEYS")
+        return self
+
+    @property
+    def jwt_previous_key_map(self) -> dict[str, str]:
+        if self.jwt_previous_keys is None:
+            return {}
+        try:
+            parsed = json.loads(self.jwt_previous_keys.get_secret_value())
+        except json.JSONDecodeError as exc:
+            raise ValueError("JWT_PREVIOUS_KEYS must be a JSON object of kid -> secret") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("JWT_PREVIOUS_KEYS must be a JSON object of kid -> secret")
+        mapping: dict[str, str] = {}
+        for kid, secret in parsed.items():
+            if not isinstance(kid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,16}", kid):
+                raise ValueError("JWT previous key ids must match [A-Za-z0-9_-]{1,16}")
+            if not isinstance(secret, str) or len(secret) < 32:
+                raise ValueError("Every JWT previous secret must be at least 32 characters")
+            mapping[kid] = secret
+        return mapping
+
+    @property
+    def jwt_keyring(self) -> dict[str, str]:
+        keys = {self.jwt_active_kid: self.jwt_secret.get_secret_value()}
+        keys.update(self.jwt_previous_key_map)
+        return keys
 
     @property
     def cors_origin_list(self) -> tuple[str, ...]:

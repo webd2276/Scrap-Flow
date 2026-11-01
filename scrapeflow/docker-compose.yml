@@ -48,20 +48,46 @@ services:
   api:
     <<: *backend
     command: ["uvicorn", "apps.api.asgi:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     mem_limit: 512m
     cpus: 1.0
 
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
   worker:
     <<: *backend
     command: ["celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=4"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     mem_limit: 1g
     cpus: 2.0
 
   beat:
     <<: *backend
     command: ["celery", "-A", "apps.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     mem_limit: 256m
     cpus: 0.5
 

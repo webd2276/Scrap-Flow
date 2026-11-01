@@ -6,16 +6,21 @@ The importable ASGI target lives in ``apps.api.asgi``.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from packages.core.checks import ReadinessProbe, build_default_probes
+from packages.core.db import create_engine, create_sessionmaker
 from packages.core.logging import configure_logging
+from packages.core.redis import create_redis
 from packages.core.settings import Settings, get_settings
 
 from apps.api.errors import register_error_handlers
 from apps.api.middleware.request_context import RequestContextMiddleware
-from apps.api.routers import health
+from apps.api.routers import auth, health, keys
 
 
 def create_app(
@@ -34,12 +39,25 @@ def create_app(
             send_default_pii=False,
         )
 
+    @asynccontextmanager
+    async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        engine = create_engine(resolved)
+        application.state.engine = engine
+        application.state.sessionmaker = create_sessionmaker(engine)
+        application.state.redis = create_redis(resolved)
+        try:
+            yield
+        finally:
+            await application.state.redis.aclose()
+            await engine.dispose()
+
     app = FastAPI(
         title=resolved.app_name,
         version=resolved.app_version,
         docs_url="/docs" if not resolved.is_production else None,
         redoc_url=None,
         openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
     app.state.settings = resolved
     app.state.probes = probes if probes is not None else build_default_probes(resolved)
@@ -65,4 +83,6 @@ def create_app(
 
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(keys.router)
     return app

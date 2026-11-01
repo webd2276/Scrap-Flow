@@ -95,3 +95,38 @@ Evidence format `file:line`. Effort: S ≤ 0.5 day, M 1–2 days, L 3+ days. Ris
 - **Unverified:** 2.
 
 Critical-path gaps: durable job model/queue (REQ-007/008/018/019), worker/Grid split (REQ-009/017), SSRF depth (REQ-042/043), tenant auth (REQ-030/031), typed automation (REQ-022/024/026), quota (REQ-035/037), and tests/CI (REQ-014/067/077).
+
+## Live delta after Phase 1–2 (2026-11-01)
+
+This table supersedes the baseline row for the listed requirements. Remaining
+baseline rows are unchanged and still describe unimplemented phases.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-005 | Done | `pyproject.toml:6` requires `>=3.12,<3.13`; `Dockerfile:1`; CI uses Python 3.12. Local venv is CPython 3.12.16. |
+| REQ-007 | Partial | `packages/core/db.py:29-45`, `packages/core/redis.py:10-25`, compose Postgres 16/Redis 7. Verified locally on PostgreSQL 18.6/Redis 8.0.5; compose run UNVERIFIED (Docker denied). |
+| REQ-013 | Partial | JSON logs `packages/core/logging.py:10-29`; `/health` + `/ready` `apps/api/routers/health.py:13-37`; Sentry init `apps/api/main.py:34-41`. Prometheus endpoint is Phase 9. |
+| REQ-014 | Partial | Unit + real PG/Redis integration suite in `tests/`; Selenium/local-site tests arrive with Phase 3. |
+| REQ-015 | Partial | `.github/workflows/ci.yml` defines lint/type/unit/integration/audit/image jobs. Not executed on GitHub from this host. |
+| REQ-030 | Done | `packages/core/models.py:64-142`; tenant resolution in `apps/api/deps.py:118-176`; isolation test `tests/integration/test_auth.py`. |
+| REQ-031 | Done | `packages/core/security/keys.py:1-55`, `apps/api/services/keys.py:17-74`, `apps/api/deps.py:70-115`; hash/prefix/scope/revoke/last-used verified. |
+| REQ-032 | Done | `packages/core/security/passwords.py`, `packages/core/security/tokens.py:41-110`, `apps/api/services/auth.py:47-206`, `apps/api/routers/auth.py:58-180`. |
+| REQ-046 | Done | SHA-256 + pepper, prefix lookup, constant-time compare: `packages/core/security/keys.py:24-55`; plaintext never listed: `tests/integration/test_auth.py`. |
+| REQ-047 | Done | Atomic Redis token bucket `packages/core/rate_limit.py:13-105`; org/IP/auth limits `apps/api/deps.py:178-245`; 429 + headers verified against real Redis. |
+| REQ-050 | Done | `packages/core/settings.py:18-162`; missing/short secrets abort startup (verified). |
+| REQ-051 | Done | `uv.lock`; `pip-audit` reports no known vulnerabilities (2026-11-01); CI audit job present. |
+| REQ-052 | Partial | ToS acceptance/version recorded (`apps/api/services/auth.py:60-83`), append-only `audit_logs` (`packages/core/models.py:163-179`), audit writes on signup/login/key events. Robots/AUP enforcement is Phase 3. |
+| REQ-057 | Done | `migrations/versions/f141298caa34_phase_2_tenancy_auth_keys_audit.py`; upgrade, `alembic check`, downgrade-to-base, and re-upgrade verified on a disposable DB (`tests/integration/test_migrations.py`). |
+| REQ-060 | Done | Error envelope + typed codes `packages/core/errors.py`, handlers `apps/api/errors.py`. |
+| REQ-062 | Done | `apps/api/middleware/request_context.py`; request IDs echoed and bound to JSON logs (verified live). |
+| REQ-064 | Done | `apps/` + `packages/` layout; legacy `app/` removed in commit `8e7018f`. |
+| REQ-066 | Done | Git repo; phase commits `0b5963f`, `8e7018f`; quality gates run per phase. |
+| REQ-067 | Partial | 40 tests: 25 unit + 15 integration, 83.65% combined coverage. Browser/e2e layers pending. |
+| REQ-069 | Done | `docs/decisions.md` D-001…D-018. |
+| REQ-071 | Partial | Dev/prod compose, one-shot `migrate` service, seeded demo org/user/key (`scripts/seed.py`). Full compose/Grid startup UNVERIFIED (Docker denied). |
+| REQ-077 | Partial | CI workflow defined but never executed on GitHub; `docker build` UNVERIFIED. |
+
+Phase 2 explicit gaps carried forward:
+- `usage_ledger` is intentionally deferred to Phase 5 with quota accounting.
+- Role management/invite endpoints are not exposed yet; roles exist and are enforced.
+- Prometheus `/metrics`, Stripe, Selenium, schedules, webhooks, retention remain later phases.

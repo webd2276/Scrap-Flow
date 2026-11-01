@@ -44,7 +44,7 @@ class RedisProbe:
         try:
             await client.ping()
         finally:
-            await client.aclose()  # type: ignore[attr-defined]
+            await client.aclose()
 
 
 def build_default_probes(settings: Settings) -> list[ReadinessProbe]:
