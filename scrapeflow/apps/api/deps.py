@@ -177,6 +177,16 @@ def require_scope(scope: Scope) -> Callable[..., Awaitable[AuthContext]]:
     return dependency
 
 
+def require_any_scope(*scopes: Scope) -> Callable[..., Awaitable[AuthContext]]:
+    async def dependency(context: AuthContext = Depends(get_auth)) -> AuthContext:
+        if not any(_has_scope(context, scope) for scope in scopes):
+            allowed = ", ".join(scope.value for scope in scopes)
+            raise AppError(403, ErrorCode.FORBIDDEN, f"Missing one of: {allowed}")
+        return context
+
+    return dependency
+
+
 async def org_rate_limit(
     response: Response,
     context: AuthContext = Depends(get_auth),

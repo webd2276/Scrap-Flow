@@ -4,8 +4,10 @@ import uuid
 from pathlib import Path
 
 import pytest
+from apps.api.schemas.automation import AutomationRequest, ClickStep
 from apps.worker.browser import runner
 from apps.worker.browser.driver import BrowserOptions, build_chrome_options
+from packages.core.errors import AppError, ErrorCode
 from packages.core.settings import Settings
 
 
@@ -72,6 +74,37 @@ def test_browser_runner_with_fake_driver(tmp_path: Path, monkeypatch: pytest.Mon
     assert fake.quit_called is True
 
 
+class FakeAutomationActions:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.current = "https://example.com/"
+
+    def click(self, selector: str, *, by: str, timeout: float) -> None:
+        if self.fail:
+            raise AppError(
+                422,
+                ErrorCode.SELECTOR_NOT_FOUND,
+                "Element not found",
+                details={"retryable": False},
+            )
+
+    def current_url(self) -> str:
+        return self.current
+
+    def page_source(self) -> str:
+        return "<html><title>Automation</title></html>"
+
+    def screenshot(self, *, full_page: bool) -> bytes:
+        return b"\x89PNG-automation"
+
+
+class FakeAutomationDriver:
+    session_id = "fake-session"
+
+    def quit(self) -> None:
+        pass
+
+
 def test_browser_options_clamp_and_flags() -> None:
     options = BrowserOptions(
         proxy_url="http://egress-proxy:8080",
@@ -87,3 +120,60 @@ def test_browser_options_clamp_and_flags() -> None:
     assert any("MAP * ~NOTFOUND" in argument for argument in arguments)
     assert any("EXCLUDE egress-proxy" in argument for argument in arguments)
     assert chrome.capabilities["pageLoadStrategy"] == "normal"
+
+
+def test_run_automation_success_captures_final_screenshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(runner, "register_session", lambda *a, **k: None)
+    monkeypatch.setattr(runner, "clear_session", lambda *a, **k: None)
+    fake = FakeAutomationActions()
+    monkeypatch.setattr(runner, "SeleniumActions", lambda driver: fake)
+
+    request = AutomationRequest(
+        url="https://example.com/",
+        steps=[{"action": "screenshot", "name": "step"}],
+        screenshot=True,
+    )
+    result = runner.run_automation(
+        settings=_settings(tmp_path),
+        job_id=uuid.uuid4(),
+        request=request,
+        secrets={},
+        timeout_seconds=5,
+        proxy_url="http://127.0.0.1:9999",
+        driver_factory=lambda options, settings: FakeAutomationDriver(),
+    )
+
+    assert result.failure is None
+    assert result.final_url == "https://example.com/"
+    assert [shot.name for shot in result.screenshots] == ["step", "final"]
+    assert result.step_run.records[0].status == "ok"
+
+
+def test_run_automation_failure_returns_partial_result_and_screenshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(runner, "register_session", lambda *a, **k: None)
+    monkeypatch.setattr(runner, "clear_session", lambda *a, **k: None)
+    fake = FakeAutomationActions(fail=True)
+    monkeypatch.setattr(runner, "SeleniumActions", lambda driver: fake)
+
+    request = AutomationRequest(
+        url="https://example.com/",
+        steps=[ClickStep(selector="#missing")],
+    )
+    result = runner.run_automation(
+        settings=_settings(tmp_path),
+        job_id=uuid.uuid4(),
+        request=request,
+        secrets={},
+        timeout_seconds=5,
+        proxy_url="http://127.0.0.1:9999",
+        driver_factory=lambda options, settings: FakeAutomationDriver(),
+    )
+
+    assert result.failure is not None
+    assert result.failure.code == ErrorCode.SELECTOR_NOT_FOUND
+    assert result.step_run.records[-1].status == "failed"
+    assert [shot.name for shot in result.screenshots] == ["failure"]

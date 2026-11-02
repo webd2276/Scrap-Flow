@@ -22,7 +22,7 @@ from packages.core.ssrf import SSRFPolicy
 
 from apps.api.errors import register_error_handlers
 from apps.api.middleware.request_context import RequestContextMiddleware
-from apps.api.routers import auth, health, jobs, keys, scrape
+from apps.api.routers import auth, automate, health, jobs, keys, scrape
 from apps.api.services.dispatch import (
     CeleryJobDispatcher,
     JobDispatcher,
@@ -102,5 +102,6 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(keys.router)
     app.include_router(scrape.router)
+    app.include_router(automate.router)
     app.include_router(jobs.router)
     return app

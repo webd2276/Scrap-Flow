@@ -14,7 +14,7 @@ from packages.core.models import JobStatus
 from packages.core.scopes import Scope
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.deps import AuthContext, org_rate_limit, require_scope
+from apps.api.deps import AuthContext, org_rate_limit, require_any_scope, require_scope
 from apps.api.schemas.scrape import (
     ArtifactRead,
     JobAccepted,
@@ -64,7 +64,7 @@ async def get_job(
 async def cancel_job(
     job_id: uuid.UUID,
     response: Response,
-    context: AuthContext = Depends(require_scope(Scope.SCRAPE_WRITE)),
+    context: AuthContext = Depends(require_any_scope(Scope.SCRAPE_WRITE, Scope.AUTOMATION_WRITE)),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(org_rate_limit),
 ) -> JobAccepted:

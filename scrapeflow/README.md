@@ -4,11 +4,14 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 3 complete — durable scrape jobs, worker, SSRF-safe egress, artifacts.**
-Phase 3 adds `POST /v1/scrape`, job reads/cancel/events, local and S3/MinIO
-artifacts, a hardened egress proxy, and Selenium Grid wiring. Browser/Grid and
-MinIO paths are implemented but **UNVERIFIED on this host** (Docker denied, no
-Chrome). See `docs/analysis/02-gap-matrix.md` for the live gap list.
+**Status: Phase 4 complete — typed automation steps with transient secrets.**
+Phase 4 adds `POST /v1/automate`: a discriminated `action` union, per-step
+timeouts/retries/optional steps, nested `execute_if_present`/`loop_pages`,
+AES-GCM-sealed secrets in Redis (never in PostgreSQL/logs), failure screenshots,
+and partial results. Chrome for Testing verifies the step engine locally
+(every action, interpolation, failure screenshot); Selenium Grid/egress-proxy
+compose remains **UNVERIFIED** (Docker denied). See
+`docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Requirements
 
@@ -100,6 +103,7 @@ EGRESS_PROXY_LISTEN_HOST=127.0.0.1 EGRESS_PROXY_LISTEN_PORT=8888 \
 | GET | `/v1/keys` | `keys:manage` | list keys (never plaintext) |
 | DELETE | `/v1/keys/{id}` | `keys:manage` | revoke a key |
 | POST | `/v1/scrape` | `scrape:write` | accept a durable scrape job (202) |
+| POST | `/v1/automate` | `automation:write` | accept a typed browser automation job (202) |
 | GET | `/v1/jobs` | `jobs:read` | list tenant jobs (status filter, paging) |
 | GET | `/v1/jobs/{id}` | `jobs:read` | job status + result/error |
 | POST | `/v1/jobs/{id}/cancel` | `scrape:write` | cancel queued/running job |
@@ -121,6 +125,32 @@ curl -s -X POST localhost:8000/v1/scrape \
   -d '{"url":"https://example.com/","selectors":{"title":{"css":"title"}},"include_html":true}'
 ```
 
+### Automation example
+
+```bash
+curl -s -X POST localhost:8000/v1/automate \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{
+    "url":"https://93.184.216.34/",
+    "steps":[
+      {"action":"type","selector":"#email","text":"{{email}}"},
+      {"action":"click","selector":"#submit","retries":1},
+      {"action":"wait_for","selector":"#message"},
+      {"action":"get_text","name":"message","selector":"#message"},
+      {"action":"screenshot","name":"after-submit"}
+    ],
+    "secrets":{"email":"user@example.com"}
+  }'
+```
+
+Actions: `goto`, `click`, `type`, `press`, `select`, `hover`, `wait_for`,
+`sleep`, `scroll`, `extract`, `get_text`, `screenshot`, `execute_if_present`,
+`loop_pages`. Each step supports `optional`, `timeout_s`, and `retries`.
+Secrets may be referenced as `{{name}}` only in `type.text`, `select.value`, and
+`press.key`; values are sealed with AES-GCM in Redis, bound to the job id, and
+deleted when the job finishes. Step records never include input text. A failing
+step produces a `failure_screenshot` artifact plus a partial result.
+
 ### Security model
 
 - The API validates scheme/port/host and denies non-global addresses before
@@ -136,6 +166,11 @@ curl -s -X POST localhost:8000/v1/scrape \
 - Artifact storage keys are server-generated, traversal-checked, and scoped to
   `org/job`. S3/MinIO downloads use short-lived presigned redirects; the local
   backend streams with `attachment`, `nosniff`, and a sandbox CSP.
+- Automation secrets never enter the job payload or database. The API seals them
+  with AES-256-GCM under a key derived from `AUTOMATION_SECRET_KEY` (or HKDF from
+  `JWT_SECRET`), binds the ciphertext to the job id, and the worker deletes the
+  Redis key in a `finally` block. Retries only use the in-memory map for that
+  execution, and failure messages are redacted.
 
 Rate limits are atomic Redis token buckets per organisation and per IP, with
 `X-RateLimit-*` and `Retry-After` headers. Limits are configured in
@@ -153,6 +188,15 @@ make cov      # pytest with coverage
 TEST_DATABASE_URL='postgresql+asyncpg://scrapeflow@127.0.0.1:55432/scrapeflow_test' \
 TEST_REDIS_URL='redis://127.0.0.1:56379/0' \
 uv run pytest tests/integration
+```
+
+Real browser test (Chrome for Testing + chromedriver; skipped without
+`CHROME_BINARY`):
+
+```bash
+CHROME_BINARY=/path/to/chrome-linux64/chrome \
+CHROMEDRIVER_BINARY=/path/to/chromedriver-linux64/chromedriver \
+uv run pytest -m browser
 ```
 
 ## Layout

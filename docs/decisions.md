@@ -132,3 +132,29 @@ Reason: MinIO discontinued its free community images during 2026. Compose uses
 `MINIO_IMAGE` with a pinned default and documents that operators must mirror the
 image. `scripts/ensure_bucket.py` creates the bucket with the application image,
 so no extra `mc` image is required.
+
+## D-025 — Automation secrets live only in sealed Redis blobs
+Alternatives: store encrypted values in the job row; keep them in process memory.
+Reason: the job payload is visible to every read of `jobs` and to backups. The API
+seals the map with AES-256-GCM, using a dedicated `AUTOMATION_SECRET_KEY` or an
+HKDF derivation from `JWT_SECRET`, and binds the ciphertext to the job id as
+associated data. The worker reads it once, deletes the key in `finally`, and
+never writes values to logs or step records. TTL is a backstop if the worker
+dies. Placeholder interpolation is limited to `type.text`, `select.value`, and
+`press.key`; undeclared placeholders are rejected at submission.
+
+## D-026 — Steps fail closed on unknown fields and explicit optionality
+Alternatives: ignore unknown actions/fields for forward compatibility.
+Reason: silently ignoring a paid action or a misspelled selector produces a
+successful-looking job with missing output. The discriminated union rejects
+unknown actions, extra fields, and missing required fields. `optional=true`
+records a `skipped` step and continues; otherwise the job fails with a partial
+result and a failure screenshot. Retries are bounded per step and only for
+transient browser failures.
+
+## D-027 — Automation is browser-only; scrape keeps the HTTP fast path
+Alternatives: run automation steps against a parsed DOM without a browser.
+Reason: clicks, typing, hover, and navigation require a real browser, and
+pretending otherwise would accept jobs the engine cannot execute. Automation
+therefore always uses Selenium and the egress proxy; `render_js` is implied.
+Static extraction remains a scrape job.

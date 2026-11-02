@@ -97,6 +97,7 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 - Env note: Docker is unavailable to this user. Grid e2e will use a locally downloaded Chrome + Selenium (and optionally a local Grid jar) for verification; compose/Grid network checks are marked UNVERIFIED unless access is granted.
 
 ### Phase 4 — Automation step engine (L)
+**Status (2026-11-02):** Implemented. Typed step union, retries/optional/deadline handling, AES-GCM-sealed Redis secrets, failure screenshots, and partial results; 167 tests pass (1 Grid-specific skip plus a real local Chrome run) and 78.18% branch coverage. Real Chrome for Testing exercised every action, secret interpolation, a real failure screenshot, and a local static site; Selenium Grid/egress-proxy compose remains UNVERIFIED.
 **Goal:** fully typed, retryable, secret-safe automation with failure artifacts.
 - Files: `apps/api/schemas/automation.py`, `apps/worker/browser/steps.py`, `browser/runner.py`, `services/secrets.py`, `routers/automate.py`.
 - Models: discriminated union `goto|click|type|press|select|hover|wait_for|sleep|scroll|extract|get_text|screenshot|execute_if_present|loop_pages`; base `optional`, `timeout_s`, `retries`; nested steps capped (depth 3, total steps ≤ plan).

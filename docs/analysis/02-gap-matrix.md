@@ -164,3 +164,27 @@ Phase 3 explicit gaps carried forward:
 - Webhook delivery/signing, robots.txt enforcement, AUP domain blocklist, quotas,
   schedules, exports, and automation steps remain later phases.
 - `proxy_country` remains a 422 until a proxy provider is configured.
+
+## Live delta after Phase 4 (2026-11-02)
+
+Phase 4 adds the typed automation engine. Browser execution is still
+**Unverified** on this host; step semantics, secret handling, and the
+API→worker lifecycle are exercised with fakes and integration tests.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-002 | Partial | Scrape path complete; automation union/executor `apps/api/schemas/automation.py`, `apps/worker/browser/steps.py`. Real local Chrome run passed every action; Grid still UNVERIFIED. |
+| REQ-022 | Done | Discriminated `action` union rejects unknown actions, missing fields, and extras `apps/api/schemas/automation.py:38-215`; tests cover every action. |
+| REQ-023 | Done | `hover`, `execute_if_present`, and `loop_pages` implemented `apps/worker/browser/steps.py:337-374`; fake-browser unit tests. |
+| REQ-024 | Done | Per-step `timeout_s`, `retries`, `optional`, and deadline checks `apps/worker/browser/steps.py:398-455`; retry/optional tests. |
+| REQ-025 | Done | Result/HTML/step/failure screenshots with SHA-256 `apps/worker/automate.py:45-118`; failure returns partial result. |
+| REQ-026 | Done | Declared-secret validation + `{{name}}` interpolation only in type/select/press `apps/api/schemas/automation.py:290-340`; AES-GCM Redis staging `packages/core/secretbox.py`, `apps/api/services/secrets.py`, worker deletion `apps/worker/secrets.py`. Integration asserts plaintext never reaches PostgreSQL. |
+| REQ-045 | Partial | Step/secret/nesting/selector/text caps in the schema; response and screenshot byte/pixel caps still partial. |
+| REQ-054 | Partial | Cancellation checked before automation and after execution; browser steps are not polled mid-step. |
+| REQ-067 | Done | 167 passed, 1 skipped (Grid-specific), 78.18% branch coverage. |
+| REQ-072 | Done | `tests/e2e/test_automation_browser.py` passed against Chrome for Testing 156 + chromedriver with a local static site: 7 actions, secret interpolation, and a failure screenshot. Grid/proxy compose still UNVERIFIED. |
+
+Phase 4 explicit gaps carried forward:
+- Real local Chrome execution is verified; Selenium Grid + egress-proxy compose execution is UNVERIFIED.
+- Mid-step cancellation for browser jobs is checked between jobs/steps, not inside a blocking Selenium call.
+- Screenshot pixel/byte caps and step-level plan limits arrive with Phase 5 plans.

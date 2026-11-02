@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     browser_page_load_timeout_seconds: int = Field(default=60, ge=5, le=300)
     session_registry_ttl_seconds: int = Field(default=900, ge=60, le=3600)
 
+    automation_max_steps: int = Field(default=100, ge=1, le=500)
+    automation_max_depth: int = Field(default=3, ge=1, le=5)
+    automation_max_secret_bytes: int = Field(default=16_384, ge=0, le=1_048_576)
+    automation_secret_key: SecretStr | None = Field(default=None, min_length=32)
+    automation_secrets_ttl_seconds: int = Field(default=960, ge=60, le=7200)
+
     artifacts_local_dir: str = "var/artifacts"
     artifacts_retention_days: int = Field(default=7, ge=1, le=365)
     artifacts_max_bytes: int = Field(default=10_000_000, ge=1024, le=100_000_000)
@@ -113,6 +119,7 @@ class Settings(BaseSettings):
         "artifacts_secret_key",
         "sentry_dsn",
         "egress_proxy_url",
+        "automation_secret_key",
         "stripe_secret_key",
         "stripe_webhook_secret",
         "stripe_price_starter",
@@ -191,6 +198,10 @@ class Settings(BaseSettings):
     def _validate_job_timing(self) -> Settings:
         if self.job_lease_seconds < self.job_timeout_seconds + 30:
             raise ValueError("JOB_LEASE_SECONDS must be at least JOB_TIMEOUT_SECONDS + 30")
+        if self.automation_secrets_ttl_seconds < self.job_timeout_seconds + 60:
+            raise ValueError(
+                "AUTOMATION_SECRETS_TTL_SECONDS must be at least JOB_TIMEOUT_SECONDS + 60"
+            )
         return self
 
     @model_validator(mode="after")
