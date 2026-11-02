@@ -22,7 +22,7 @@ from packages.core.ssrf import SSRFPolicy
 
 from apps.api.errors import register_error_handlers
 from apps.api.middleware.request_context import RequestContextMiddleware
-from apps.api.routers import auth, automate, health, jobs, keys, scrape
+from apps.api.routers import auth, automate, billing, health, jobs, keys, scrape
 from apps.api.services.dispatch import (
     CeleryJobDispatcher,
     JobDispatcher,
@@ -94,7 +94,18 @@ def create_app(
             "X-API-Key",
             "X-Request-ID",
         ],
-        expose_headers=["X-Request-ID", "Retry-After", "X-RateLimit-Remaining"],
+        expose_headers=[
+            "X-Request-ID",
+            "Retry-After",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+            "X-Quota-Limit",
+            "X-Quota-Remaining",
+            "X-Quota-Reset",
+            "X-Concurrency-Limit",
+            "X-Concurrency-Remaining",
+        ],
     )
 
     register_error_handlers(app)
@@ -104,4 +115,5 @@ def create_app(
     app.include_router(scrape.router)
     app.include_router(automate.router)
     app.include_router(jobs.router)
+    app.include_router(billing.router)
     return app

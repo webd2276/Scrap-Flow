@@ -188,3 +188,29 @@ Phase 4 explicit gaps carried forward:
 - Real local Chrome execution is verified; Selenium Grid + egress-proxy compose execution is UNVERIFIED.
 - Mid-step cancellation for browser jobs is checked between jobs/steps, not inside a blocking Selenium call.
 - Screenshot pixel/byte caps and step-level plan limits arrive with Phase 5 plans.
+
+## Live delta after Phase 5 (2026-11-02)
+
+Phase 5 adds plan-based metering and billing. Quota reserve/settle/reconcile and
+Stripe event handling are exercised by PostgreSQL+Redis integration tests; the
+real Stripe API and Selenium Grid/MinIO compose paths remain **Unverified** on
+this host.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-012 | Partial | Stripe checkout, portal, signature-verified webhook, and subscription lifecycle `apps/api/services/billing.py`, `apps/api/routers/billing.py`. Tests use a fake SDK and locally signed payloads; live Stripe checkout UNVERIFIED (no test keys). |
+| REQ-033 | Done | Config-driven plan catalog `packages/core/plans.py`; Free/Starter/Pro/Business limits in `GET /v1/billing/plans`. |
+| REQ-034 | Done | Weighted credit calculator `packages/core/plans.py`; unit matrix in `tests/unit/test_plans.py`. |
+| REQ-035 | Done | Lua reserve/release/concurrency helpers `packages/core/quota.py`, API reservation `apps/api/services/quota.py`; integration covers atomic suppression, release, settlement, and reconciliation. |
+| REQ-036 | Partial | Idempotent `stripe_events` insert, failed-event retry, customer/price matching, and plan-change audit `apps/api/services/billing.py`; live Stripe webhook delivery UNVERIFIED. |
+| REQ-037 | Done | `402 QUOTA_EXCEEDED` and `429 CONCURRENCY_LIMIT` with `X-Quota-*`/`X-Concurrency-*` and `Retry-After` headers `apps/api/services/quota.py`. |
+| REQ-045 | Partial | Plan-level step/page caps enforced at acceptance; screenshot pixel/byte caps still pending. |
+| REQ-058 | Done | Plan-driven artifact expiry on write `apps/worker/tasks/jobs.py` and batched purge worker `apps/worker/tasks/retention.py`; integration deletes the row and stored object. S3 lifecycle rules remain UNVERIFIED. |
+| REQ-067 | Done | 187 passed, 1 skipped (Grid-specific), 77.90% branch coverage. |
+| REQ-075 | Done | Quota and billing integration suites `tests/integration/test_quota.py`, `tests/integration/test_billing.py` including duplicate/replayed signatures and failed-event retry. |
+
+Phase 5 explicit gaps carried forward:
+- Live Stripe checkout/portal/webhooks and price IDs are UNVERIFIED; only the SDK boundary is mocked.
+- Selenium Grid + egress-proxy compose and MinIO/S3 upload/presign/lifecycle remain UNVERIFIED (Docker denied).
+- Screenshot pixel/byte caps and mid-step browser cancellation remain partial.
+- Plan downgrades do not retroactively lower an already-reserved period; limits apply to new reservations.

@@ -86,6 +86,16 @@ class ArtifactStore:
         except OSError as exc:
             raise ArtifactStoreError("Artifact is missing from storage") from exc
 
+    def delete(self, storage_key: str) -> None:
+        if self._settings.artifacts_endpoint:
+            self._delete_s3(storage_key)
+            return
+        path = self._local_path(storage_key)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise ArtifactStoreError("Could not delete artifact") from exc
+
     def presigned_url(self, storage_key: str) -> str | None:
         if not self._settings.artifacts_endpoint:
             return None
@@ -171,3 +181,12 @@ class ArtifactStore:
             return bytes(response["Body"].read())
         except Exception as exc:
             raise ArtifactStoreError("Artifact download failed") from exc
+
+    def _delete_s3(self, storage_key: str) -> None:
+        try:
+            self._s3().delete_object(
+                Bucket=self._settings.artifacts_bucket,
+                Key=storage_key,
+            )
+        except Exception as exc:
+            raise ArtifactStoreError("Artifact deletion failed") from exc

@@ -8,7 +8,6 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from functools import partial
 from typing import Any
 
@@ -201,7 +200,3 @@ async def execute_automation(
         # TTL-bounded; never mask the execution result.
         with contextlib.suppress(Exception):
             await asyncio.to_thread(delete_secrets, settings, job.id)
-
-
-def artifact_expiry(settings: Settings) -> datetime:
-    return datetime.now(UTC) + timedelta(days=settings.artifacts_retention_days)

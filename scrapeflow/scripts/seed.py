@@ -71,6 +71,7 @@ async def seed() -> None:
 
     print("ScrapeFlow demo seed")
     print(f"  org:      {org.name} ({org.slug})")
+    print(f"  plan:     {org.plan.value}")
     print(f"  email:    {user.email}")
     if generated_password:
         print(f"  password: {generated_password}")

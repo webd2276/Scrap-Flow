@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from apps.api.schemas.scrape import ExtractOptions, SelectorSpec
 
-MAX_STEPS = 100
+MAX_STEPS = 500
 MAX_DEPTH = 3
 _SELECTOR_LIMIT = 500
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
@@ -183,7 +183,7 @@ class LoopPagesStep(AutomationStepBase):
     action: Literal["loop_pages"] = "loop_pages"
     next_selector: str = Field(min_length=1, max_length=_SELECTOR_LIMIT)
     by: By = "css"
-    max_pages: int = Field(default=2, ge=2, le=25)
+    max_pages: int = Field(default=2, ge=2, le=500)
     steps: list[AutomationStep] = Field(default_factory=list, max_length=MAX_STEPS)
 
     @model_validator(mode="after")

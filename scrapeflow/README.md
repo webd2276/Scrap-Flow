@@ -4,13 +4,13 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 4 complete — typed automation steps with transient secrets.**
-Phase 4 adds `POST /v1/automate`: a discriminated `action` union, per-step
-timeouts/retries/optional steps, nested `execute_if_present`/`loop_pages`,
-AES-GCM-sealed secrets in Redis (never in PostgreSQL/logs), failure screenshots,
-and partial results. Chrome for Testing verifies the step engine locally
-(every action, interpolation, failure screenshot); Selenium Grid/egress-proxy
-compose remains **UNVERIFIED** (Docker denied). See
+**Status: Phase 5 complete — plans, credits, quotas, and Stripe billing.**
+Phase 5 adds plan-based metering: atomic credit reservation at acceptance,
+Redis-backed concurrency leases, `X-Quota-*`/`X-Concurrency-*` headers, 402/429
+errors, settlement by the worker/reaper, reconciliation, artifact retention
+purging, and a Stripe billing surface (plans, usage, checkout, portal, signed
+webhook with event idempotency). Live Stripe checkout and Selenium Grid/MinIO
+compose paths remain **UNVERIFIED** (no Stripe test keys; Docker denied). See
 `docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Requirements
@@ -110,6 +110,11 @@ EGRESS_PROXY_LISTEN_HOST=127.0.0.1 EGRESS_PROXY_LISTEN_PORT=8888 \
 | GET | `/v1/jobs/{id}/events` | `jobs:read` | lifecycle events |
 | GET | `/v1/jobs/{id}/artifacts` | `jobs:read` | artifact metadata |
 | GET | `/v1/artifacts/{id}/download` | `jobs:read` | presigned redirect or stream |
+| GET | `/v1/billing/plans` | none | plan catalog and limits |
+| GET | `/v1/billing/usage` | `billing:manage` | current period usage and limits |
+| POST | `/v1/billing/checkout` | `billing:manage` | create a Stripe checkout session |
+| POST | `/v1/billing/portal` | `billing:manage` | create a Stripe billing portal session |
+| POST | `/v1/billing/webhook` | Stripe signature | idempotent subscription lifecycle |
 
 `POST /v1/scrape` accepts CSS/XPath selectors, `render_js`, `wait_for`,
 screenshots, HTML capture, bounded pagination, and request headers. Reusing an
@@ -150,6 +155,36 @@ Secrets may be referenced as `{{name}}` only in `type.text`, `select.value`, and
 `press.key`; values are sealed with AES-GCM in Redis, bound to the job id, and
 deleted when the job finishes. Step records never include input text. A failing
 step produces a `failure_screenshot` artifact plus a partial result.
+
+### Plans, credits, and quotas
+
+| Plan | Monthly credits | Concurrency | Steps | Pages | Artifact retention |
+|---|---:|---:|---:|---:|---:|
+| Free | 100 | 1 | 10 | 5 | 1 day |
+| Starter | 5,000 | 3 | 50 | 25 | 7 days |
+| Pro | 50,000 | 10 | 100 | 100 | 30 days |
+| Business | 250,000 | 25 | 200 | 500 | 90 days |
+
+Credits are reserved atomically when a job is accepted: 1 base + 1 for browser
+rendering + 1 per screenshot + 2 per proxied request + 1 per extra page + 1 per
+10 automation steps. A reservation is released if the job never starts; once a
+worker begins execution it is committed on success, failure, timeout, or
+cancellation. Redis counters are authoritative for the current month and the
+`usage_ledger` row in PostgreSQL is the durable record; a beat task reconciles
+the two and repairs a cold or drifted Redis counter.
+
+Accepted jobs return quota headers (`X-Quota-Limit`, `X-Quota-Remaining`,
+`X-Quota-Reset`, `X-Concurrency-Limit`, `X-Concurrency-Remaining`). Limit
+violations return `402 QUOTA_EXCEEDED`, concurrency saturation returns
+`429 CONCURRENCY_LIMIT`, and both include `Retry-After`.
+
+Billing is disabled by default (`BILLING_ENABLED=false`). When enabled, set
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the per-plan
+`STRIPE_PRICE_*` IDs. `POST /v1/billing/webhook` verifies `Stripe-Signature`
+with a replay tolerance, stores `stripe_events(event_id)` for idempotency, and
+retries a previously failed event. Checkout and portal require
+`billing:manage`; a portal request without a Stripe customer returns `409`.
+Artifacts are purged after the plan retention window by a beat task.
 
 ### Security model
 

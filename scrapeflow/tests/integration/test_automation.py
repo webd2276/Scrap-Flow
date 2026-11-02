@@ -157,16 +157,6 @@ def test_worker_marks_automation_success_and_failure(
             "job"
         ]["id"]
     )
-    failure_id = uuid.UUID(
-        client.post(
-            "/v1/automate",
-            headers=auth_header(token),
-            json=_automation_payload(
-                steps=[{"action": "click", "selector": "#missing"}],
-                secrets={},
-            ),
-        ).json()["job"]["id"]
-    )
 
     async def fake_success(**_kwargs: Any) -> AutomationOutcome:
         return AutomationOutcome(result={"ok": True}, artifacts=())
@@ -189,6 +179,17 @@ def test_worker_marks_automation_success_and_failure(
     job = asyncio.run(_job_row(integration_settings, success_id))
     assert job["status"] == "succeeded"
     assert job["result"] == {"ok": True}
+
+    failure_id = uuid.UUID(
+        client.post(
+            "/v1/automate",
+            headers=auth_header(token),
+            json=_automation_payload(
+                steps=[{"action": "click", "selector": "#missing"}],
+                secrets={},
+            ),
+        ).json()["job"]["id"]
+    )
 
     monkeypatch.setattr(worker_jobs, "execute_automation", fake_failure)
     failure = asyncio.run(_run_isolated(failure_id, integration_settings))

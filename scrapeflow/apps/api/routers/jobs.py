@@ -11,7 +11,9 @@ from packages.core.artifacts import ArtifactStore, ArtifactStoreError
 from packages.core.db import get_db
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import JobStatus
+from packages.core.redis import get_redis
 from packages.core.scopes import Scope
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import AuthContext, org_rate_limit, require_any_scope, require_scope
@@ -66,9 +68,10 @@ async def cancel_job(
     response: Response,
     context: AuthContext = Depends(require_any_scope(Scope.SCRAPE_WRITE, Scope.AUTOMATION_WRITE)),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
     _: None = Depends(org_rate_limit),
 ) -> JobAccepted:
-    job = await job_service.cancel_job(db, context=context, job_id=job_id)
+    job = await job_service.cancel_job(db, context=context, job_id=job_id, redis=redis)
     return JobAccepted(job=job_service.job_read(job))
 
 

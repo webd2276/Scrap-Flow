@@ -10,7 +10,6 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from functools import partial
 from typing import Any
 
@@ -356,7 +355,3 @@ async def execute_scrape(
         html=html_artifact,
     )
     return ScrapeOutcome(result=result, artifacts=artifacts)
-
-
-def artifact_expiry(settings: Settings) -> datetime:
-    return datetime.now(UTC) + timedelta(days=settings.artifacts_retention_days)

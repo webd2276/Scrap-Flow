@@ -158,3 +158,69 @@ Reason: clicks, typing, hover, and navigation require a real browser, and
 pretending otherwise would accept jobs the engine cannot execute. Automation
 therefore always uses Selenium and the egress proxy; `render_js` is implied.
 Static extraction remains a scrape job.
+
+## D-028 — Credits are reserved at acceptance and settled once execution starts
+Alternatives: charge only on success, or charge at the end of the request.
+Reason: charging on success lets a caller launch unlimited failing work; charging
+after execution lets concurrent requests overrun the monthly cap. The API
+reserves a deterministic cost inside the acceptance transaction, releases it
+only when the job never starts (dispatch failure or pre-start cancellation), and
+commits it once a worker begins. Success, failure, timeout, and running
+cancellation all consume the reservation because the work was performed.
+Reservation and settlement are serialized per organization with a PostgreSQL
+advisory lock, so two API replicas cannot both observe the last credit.
+
+## D-029 — Redis is the fast quota counter; `usage_ledger` is the durable record
+Alternatives: count credits with `SELECT sum(...)` on every request, or trust
+Redis alone.
+Reason: a SQL sum on the hot path serializes acceptance, while Redis alone loses
+the month on eviction or failover. Lua scripts make reserve/release atomic, and
+each accepted job writes a `usage_ledger` row in the same transaction as the job.
+A beat task reconciles the Redis counter upward from the ledger and repairs a
+cold cache. Reads prefer the ledger when it is ahead, so a lost Redis key cannot
+silently grant a fresh quota.
+
+## D-030 — Concurrency is a self-expiring Redis lease, not a database count
+Alternatives: count `running` rows in PostgreSQL, or hold a semaphore in memory.
+Reason: a crashed worker must not block the organization forever. Each accepted
+job adds a member to an org-scoped sorted set with a TTL above the hard job
+deadline; the worker and reaper remove it on completion. Membership is keyed by
+job id, so acquiring the same job twice is idempotent. The reaper also removes
+leases for jobs that no longer exist. PostgreSQL remains the source of truth for
+job state, but the lease alone gates admission.
+
+## D-031 — Plan-limit violations return 402; concurrency saturation returns 429
+Alternatives: use 403 for both, or hide limits from responses.
+Reason: the dashboard needs to distinguish "upgrade your plan" from "retry
+shortly". 402 `QUOTA_EXCEEDED` covers exhausted credits and step/page caps, with
+`X-Quota-Limit`, `X-Quota-Remaining`, and `X-Quota-Reset`. 429
+`CONCURRENCY_LIMIT` covers the in-flight cap and includes `Retry-After` plus
+`X-Concurrency-*`. Both are typed errors, so clients never parse prose.
+
+## D-032 — Stripe events are recorded before they are applied
+Alternatives: apply first and rely on Stripe's retry window.
+Reason: a crash between applying a plan change and recording the event would
+double-apply on redelivery. `stripe_events.event_id` is unique; the row is
+inserted with `status=processing` before side effects. A duplicate with
+`status=processed` returns `duplicate: true`; a `failed` row is retried and
+flipped to `processed` on success. Signatures are verified over the raw body with
+a bounded timestamp tolerance, and unknown event types are recorded but ignored
+rather than failing the endpoint.
+
+## D-033 — Artifact retention is plan-driven on write; the purger is generic
+Alternatives: a single deployment-wide retention value, or per-plan S3 buckets.
+Reason: `Organization.plan` determines `expires_at` when the artifact row is
+written, so upgrading or downgrading a plan affects new artifacts without a data
+migration. The beat purger deletes any row past `expires_at` and its object in
+bounded batches, which also covers rows left by deleted jobs. Operators may still
+add lifecycle rules for defense in depth, but correctness does not depend on
+them.
+
+## D-034 — Checkout and portal are operator-configured, not hard-coded
+Alternatives: embed price IDs or return URLs in application code.
+Reason: price IDs differ between Stripe test and live modes and may change with
+pricing experiments. `STRIPE_PRICE_*`, `BILLING_SUCCESS_URL`,
+`BILLING_CANCEL_URL`, and `BILLING_PORTAL_RETURN_URL` are settings; a missing
+price returns `503 BILLING_ERROR` instead of creating a broken session. Billing
+is off by default (`BILLING_ENABLED=false`), while local quota accounting remains
+active so development and tests exercise the same admission path.

@@ -55,6 +55,12 @@ class JobStatus(StrEnum):
     TIMED_OUT = "timed_out"
 
 
+class UsageLedgerStatus(StrEnum):
+    RESERVED = "reserved"
+    COMMITTED = "committed"
+    RELEASED = "released"
+
+
 ROLE_ENUM = Enum(
     Role,
     name="role",
@@ -100,6 +106,7 @@ class Organization(TimestampMixin, Base):
         Boolean, default=True, server_default="true", nullable=False
     )
     billing_customer_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    billing_subscription_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
 
 
@@ -213,6 +220,15 @@ JOB_STATUS_ENUM = Enum(
     validate_strings=True,
 )
 
+USAGE_LEDGER_STATUS_ENUM = Enum(
+    UsageLedgerStatus,
+    name="usage_ledger_status",
+    native_enum=False,
+    length=16,
+    values_callable=lambda values: [item.value for item in values],
+    validate_strings=True,
+)
+
 TERMINAL_JOB_STATUSES: frozenset[JobStatus] = frozenset(
     {
         JobStatus.SUCCEEDED,
@@ -259,6 +275,7 @@ class Job(TimestampMixin, Base):
     max_attempts: Mapped[int] = mapped_column(
         Integer, default=2, server_default="2", nullable=False
     )
+    credits: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     worker_id: Mapped[str | None] = mapped_column(String(255))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -307,3 +324,57 @@ class Artifact(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class UsageLedger(TimestampMixin, Base):
+    """One quota reservation per job, settled exactly once.
+
+    ``reserved`` and ``committed`` rows count against the current period.
+    ``released`` rows are kept for auditability. The unique ``job_id`` makes
+    settlement idempotent even when a worker and the reaper race.
+    """
+
+    __tablename__ = "usage_ledger"
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_usage_ledger_job_id"),
+        Index("ix_usage_ledger_org_period", "org_id", "period"),
+        Index("ix_usage_ledger_status", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    period: Mapped[str] = mapped_column(String(7), nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[UsageLedgerStatus] = mapped_column(
+        USAGE_LEDGER_STATUS_ENUM,
+        default=UsageLedgerStatus.RESERVED,
+        server_default=UsageLedgerStatus.RESERVED.value,
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(String(64), default="job", server_default="job")
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StripeEvent(Base):
+    """Verified Stripe event ids, used to make webhook handling idempotent."""
+
+    __tablename__ = "stripe_events"
+    __table_args__ = (Index("ix_stripe_events_status", "status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    type: Mapped[str] = mapped_column(String(80), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="processing", server_default="processing", nullable=False
+    )
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

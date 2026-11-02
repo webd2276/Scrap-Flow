@@ -83,16 +83,20 @@ class Settings(BaseSettings):
     browser_page_load_timeout_seconds: int = Field(default=60, ge=5, le=300)
     session_registry_ttl_seconds: int = Field(default=900, ge=60, le=3600)
 
-    automation_max_steps: int = Field(default=100, ge=1, le=500)
+    automation_max_steps: int = Field(default=500, ge=1, le=500)
     automation_max_depth: int = Field(default=3, ge=1, le=5)
     automation_max_secret_bytes: int = Field(default=16_384, ge=0, le=1_048_576)
     automation_secret_key: SecretStr | None = Field(default=None, min_length=32)
     automation_secrets_ttl_seconds: int = Field(default=960, ge=60, le=7200)
 
+    quota_reconcile_interval_seconds: int = Field(default=600, ge=60, le=86_400)
+
     artifacts_local_dir: str = "var/artifacts"
     artifacts_retention_days: int = Field(default=7, ge=1, le=365)
     artifacts_max_bytes: int = Field(default=10_000_000, ge=1024, le=100_000_000)
     artifact_presign_seconds: int = Field(default=300, ge=60, le=3600)
+    artifact_retention_interval_seconds: int = Field(default=3600, ge=60, le=86_400)
+    artifact_retention_batch_size: int = Field(default=500, ge=1, le=5000)
 
     selenium_remote_url: str | None = None
     artifacts_endpoint: str | None = None
@@ -111,6 +115,10 @@ class Settings(BaseSettings):
     stripe_price_starter: str | None = None
     stripe_price_pro: str | None = None
     stripe_price_business: str | None = None
+    stripe_webhook_tolerance_seconds: int = Field(default=300, ge=30, le=900)
+    billing_success_url: str | None = None
+    billing_cancel_url: str | None = None
+    billing_portal_return_url: str | None = None
 
     @field_validator(
         "selenium_remote_url",
@@ -125,6 +133,9 @@ class Settings(BaseSettings):
         "stripe_price_starter",
         "stripe_price_pro",
         "stripe_price_business",
+        "billing_success_url",
+        "billing_cancel_url",
+        "billing_portal_return_url",
         mode="before",
     )
     @classmethod
@@ -176,6 +187,19 @@ class Settings(BaseSettings):
     def _validate_public_base_url(cls, value: str) -> str:
         if not value.startswith(("http://", "https://")):
             raise ValueError("PUBLIC_BASE_URL must be http(s)")
+        return value.rstrip("/")
+
+    @field_validator(
+        "billing_success_url",
+        "billing_cancel_url",
+        "billing_portal_return_url",
+    )
+    @classmethod
+    def _validate_billing_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("Billing URLs must be http(s)")
         return value.rstrip("/")
 
     @model_validator(mode="after")

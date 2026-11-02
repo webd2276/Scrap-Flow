@@ -7,6 +7,7 @@ import uuid
 
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import Job, JobEvent, JobKind, JobStatus
+from packages.core.plans import automation_credit_cost, plan_for
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy, validate_url
 from redis.asyncio import Redis
@@ -17,9 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.deps import AuthContext
 from apps.api.schemas.automation import (
     AutomationRequest,
+    AutomationStep,
     GotoStep,
+    LoopPagesStep,
+    ScreenshotStep,
     walk_steps,
 )
+from apps.api.services import quota as quota_service
 from apps.api.services.audit import add_audit
 from apps.api.services.secrets import delete_secrets, store_secrets
 
@@ -29,7 +34,7 @@ async def _validate_request(
     *,
     settings: Settings,
     policy: SSRFPolicy,
-) -> str:
+) -> tuple[str, list[tuple[AutomationStep, int]]]:
     if request.proxy_country is not None:
         raise AppError(
             422,
@@ -51,7 +56,7 @@ async def _validate_request(
         raise AppError(
             422,
             ErrorCode.VALIDATION_ERROR,
-            f"This plan allows at most {settings.automation_max_steps} steps",
+            f"At most {settings.automation_max_steps} steps are allowed",
         )
     deepest = max(depth for _step, depth in walked)
     if deepest > settings.automation_max_depth:
@@ -88,7 +93,7 @@ async def _validate_request(
                 ErrorCode.VALIDATION_ERROR,
                 "Webhook URLs must use HTTPS",
             )
-    return target.url
+    return target.url, walked
 
 
 async def _existing_job(
@@ -117,15 +122,53 @@ async def create_automation_job(
     redis: Redis,
     request_id: str | None,
     idempotency_key: str | None,
-) -> tuple[Job, bool]:
-    target_url = await _validate_request(request, settings=settings, policy=policy)
+) -> tuple[Job, bool, quota_service.QuotaState]:
+    target_url, walked = await _validate_request(request, settings=settings, policy=policy)
+    plan = plan_for(context.plan)
 
     if idempotency_key:
         existing = await _existing_job(db, org_id=context.org_id, idempotency_key=idempotency_key)
         if existing is not None:
-            return existing, True
+            replay = await quota_service.replay_state(db, redis, org_id=context.org_id, plan=plan)
+            return existing, True, replay
 
+    if len(walked) > plan.max_steps:
+        await quota_service.raise_plan_limit(
+            db,
+            redis,
+            org_id=context.org_id,
+            plan=plan,
+            message=f"Your {plan.name} plan allows at most {plan.max_steps} steps per job",
+        )
+    loop_steps = [step for step, _depth in walked if isinstance(step, LoopPagesStep)]
+    page_demand = sum(step.max_pages for step in loop_steps) or 1
+    if page_demand > plan.max_pages:
+        await quota_service.raise_plan_limit(
+            db,
+            redis,
+            org_id=context.org_id,
+            plan=plan,
+            message=f"Your {plan.name} plan allows at most {plan.max_pages} pages per job",
+        )
+
+    cost = automation_credit_cost(
+        step_count=len(walked),
+        screenshot=request.screenshot,
+        screenshot_steps=sum(1 for step, _depth in walked if isinstance(step, ScreenshotStep)),
+        proxy_country=request.proxy_country,
+        extra_pages=sum(max(0, step.max_pages - 1) for step in loop_steps),
+    )
     job_id = uuid.uuid4()
+    state = await quota_service.reserve_job(
+        db,
+        redis,
+        settings=settings,
+        org_id=context.org_id,
+        job_id=job_id,
+        plan=plan,
+        cost=cost,
+    )
+
     payload = request.model_dump(mode="json", exclude={"secrets"})
     payload["url"] = target_url
     job = Job(
@@ -137,6 +180,7 @@ async def create_automation_job(
         status=JobStatus.QUEUED,
         url=target_url,
         payload=payload,
+        credits=cost,
         idempotency_key=idempotency_key,
         request_id=request_id,
         max_attempts=settings.job_max_attempts,
@@ -145,14 +189,29 @@ async def create_automation_job(
     try:
         await store_secrets(redis, settings, job_id, request.secrets)
     except Exception as exc:
+        await db.rollback()
+        await quota_service.release_reservation(
+            redis,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         raise AppError(
             503,
             ErrorCode.SERVICE_UNAVAILABLE,
             "Secret staging is unavailable; retry the request",
         ) from exc
 
-    db.add(job)
     try:
+        db.add(job)
+        quota_service.add_ledger_entry(
+            db,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         await db.flush()
         db.add(
             JobEvent(
@@ -161,8 +220,9 @@ async def create_automation_job(
                 message="Automation job accepted",
                 data={
                     "url": target_url,
-                    "steps": len(walk_steps(request.steps)),
+                    "steps": len(walked),
                     "secrets": len(request.secrets),
+                    "credits": cost,
                 },
             )
         )
@@ -175,28 +235,46 @@ async def create_automation_job(
             resource_id=str(job_id),
             details={
                 "kind": JobKind.AUTOMATION.value,
-                "steps": len(walk_steps(request.steps)),
+                "steps": len(walked),
                 "secret_count": len(request.secrets),
+                "credits": cost,
             },
         )
         await db.commit()
     except IntegrityError:
         await db.rollback()
         await _discard_secrets(redis, job_id)
+        await quota_service.release_reservation(
+            redis,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         if idempotency_key:
             existing = await _existing_job(
                 db, org_id=context.org_id, idempotency_key=idempotency_key
             )
             if existing is not None:
-                return existing, True
+                replay = await quota_service.replay_state(
+                    db, redis, org_id=context.org_id, plan=plan
+                )
+                return existing, True, replay
         raise
     except Exception:
         await db.rollback()
         await _discard_secrets(redis, job_id)
+        await quota_service.release_reservation(
+            redis,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         raise
 
     await db.refresh(job)
-    return job, False
+    return job, False, state
 
 
 async def _discard_secrets(redis: Redis, job_id: uuid.UUID) -> None:

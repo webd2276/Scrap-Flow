@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 import httpx
 import structlog
 from packages.core.models import Job, JobStatus
+from packages.core.quota import settle_job_usage
 from packages.core.settings import Settings, get_settings
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -81,6 +82,7 @@ async def _reap(
         maker = job_store.sessionmaker(settings)
         now = datetime.now(UTC)
         dispatch: list[uuid.UUID] = []
+        terminal: list[Job] = []
         requeued = 0
         failed = 0
         async with maker() as session:
@@ -98,6 +100,7 @@ async def _reap(
                         event_type="cancelled",
                         message="Job cancelled after the worker lease expired",
                     )
+                    terminal.append(job)
                     continue
                 job.lease_expires_at = None
                 job.worker_id = None
@@ -126,6 +129,7 @@ async def _reap(
                         message="Worker lease expired; no attempts remain",
                         data={"error_code": "WORKER_LOST"},
                     )
+                    terminal.append(job)
                     failed += 1
             stale = await job_store.stale_queued_jobs(
                 session,
@@ -134,6 +138,10 @@ async def _reap(
             )
             dispatch.extend(job.id for job in stale)
             await session.commit()
+
+        for job in terminal:
+            async with maker() as session:
+                await settle_job_usage(session, redis, job=job)
 
         for job_id in dict.fromkeys(dispatch):
             if dispatch_job is not None:

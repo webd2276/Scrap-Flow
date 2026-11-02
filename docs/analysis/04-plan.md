@@ -107,6 +107,7 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 - Depends: P3. **Rollback:** revert commit; `automation_v2` flag.
 
 ### Phase 5 — Plans, credits, quotas, Stripe (L)
+**Status (2026-11-02):** Implemented. Plan catalog, atomic credit reservation/settlement, Redis concurrency leases, `X-Quota-*` headers, 402/429 plan errors, reconciliation, artifact retention purge, and Stripe checkout/portal/webhook lifecycle with event idempotency; 187 tests pass (1 Grid-specific skip) with 77.90% coverage. Migration `f858743db2d5` upgrade→check→downgrade→re-upgrade verified on a disposable DB. Live Stripe checkout is UNVERIFIED (no test keys); tests exercise the SDK surface with fakes and locally signed payloads.
 **Goal:** monetizable metering with atomic limits and Stripe lifecycle.
 - Files: `packages/core/plans.py`, `services/quota.py`, `services/billing.py`, `routers/{billing,webhooks}.py`, `tasks/{reconcile,retention}.py`, migrations.
 - Plans (config): Free 100 credits/1 concurrent/10 steps/5 pages/1-day artifacts; Starter 5k/3/50/25/7d; Pro 50k/10/100/100/30d; Business 250k/25/200/500/90d. Weights: base 1, browser 1, screenshot 1, proxy 2, per extra page 1, per 10 steps 1.

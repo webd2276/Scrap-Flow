@@ -6,9 +6,19 @@ import uuid
 from datetime import UTC, datetime
 
 from packages.core.errors import AppError, ErrorCode
-from packages.core.models import Artifact, Job, JobEvent, JobKind, JobStatus
+from packages.core.models import (
+    TERMINAL_JOB_STATUSES,
+    Artifact,
+    Job,
+    JobEvent,
+    JobKind,
+    JobStatus,
+)
+from packages.core.plans import plan_for, scrape_credit_cost
+from packages.core.quota import settle_job_usage
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy, validate_url
+from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +31,7 @@ from apps.api.schemas.scrape import (
     JobRead,
     ScrapeRequest,
 )
+from apps.api.services import quota as quota_service
 from apps.api.services.audit import add_audit
 
 
@@ -35,17 +46,16 @@ async def create_scrape_job(
     request: ScrapeRequest,
     settings: Settings,
     policy: SSRFPolicy,
+    redis: Redis,
     request_id: str | None,
     idempotency_key: str | None,
-) -> tuple[Job, bool]:
+) -> tuple[Job, bool, quota_service.QuotaState]:
     if request.proxy_country is not None:
         raise AppError(
             422,
             ErrorCode.VALIDATION_ERROR,
             f"Proxy country {request.proxy_country} is not available",
         )
-    if request.pagination is not None and request.pagination.max_pages > 50:
-        raise AppError(422, ErrorCode.VALIDATION_ERROR, "max_pages must be 50 or fewer")
     if (
         request.timeout_seconds is not None
         and request.timeout_seconds > settings.job_timeout_seconds
@@ -66,6 +76,7 @@ async def create_scrape_job(
                 "Webhook URLs must use HTTPS",
             )
 
+    plan = plan_for(context.plan)
     if idempotency_key:
         existing = (
             await db.execute(
@@ -76,11 +87,40 @@ async def create_scrape_job(
             )
         ).scalar_one_or_none()
         if existing is not None:
-            return existing, True
+            replay = await quota_service.replay_state(db, redis, org_id=context.org_id, plan=plan)
+            return existing, True, replay
+
+    max_pages = request.pagination.max_pages if request.pagination is not None else 1
+    if max_pages > plan.max_pages:
+        await quota_service.raise_plan_limit(
+            db,
+            redis,
+            org_id=context.org_id,
+            plan=plan,
+            message=f"Your {plan.name} plan allows at most {plan.max_pages} pages per job",
+        )
+
+    cost = scrape_credit_cost(
+        render_js=request.render_js,
+        screenshot=request.screenshot,
+        proxy_country=request.proxy_country,
+        max_pages=max_pages,
+    )
+    job_id = uuid.uuid4()
+    state = await quota_service.reserve_job(
+        db,
+        redis,
+        settings=settings,
+        org_id=context.org_id,
+        job_id=job_id,
+        plan=plan,
+        cost=cost,
+    )
 
     payload = request.model_dump(mode="json")
     payload["url"] = target.url
     job = Job(
+        id=job_id,
         org_id=context.org_id,
         created_by=context.user_id,
         api_key_id=context.api_key_id,
@@ -88,19 +128,27 @@ async def create_scrape_job(
         status=JobStatus.QUEUED,
         url=target.url,
         payload=payload,
+        credits=cost,
         idempotency_key=idempotency_key,
         request_id=request_id,
         max_attempts=settings.job_max_attempts,
     )
-    db.add(job)
     try:
+        db.add(job)
+        quota_service.add_ledger_entry(
+            db,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         await db.flush()
         db.add(
             JobEvent(
                 job_id=job.id,
                 type="queued",
                 message="Job accepted",
-                data={"url": target.url, "render_js": request.render_js},
+                data={"url": target.url, "render_js": request.render_js, "credits": cost},
             )
         )
         add_audit(
@@ -110,11 +158,22 @@ async def create_scrape_job(
             org_id=context.org_id,
             user_id=context.user_id,
             resource_id=str(job.id),
-            details={"kind": job.kind.value, "render_js": request.render_js},
+            details={
+                "kind": job.kind.value,
+                "render_js": request.render_js,
+                "credits": cost,
+            },
         )
         await db.commit()
     except IntegrityError:
         await db.rollback()
+        await quota_service.release_reservation(
+            redis,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         if idempotency_key:
             existing = (
                 await db.execute(
@@ -125,10 +184,23 @@ async def create_scrape_job(
                 )
             ).scalar_one_or_none()
             if existing is not None:
-                return existing, True
+                replay = await quota_service.replay_state(
+                    db, redis, org_id=context.org_id, plan=plan
+                )
+                return existing, True, replay
+        raise
+    except Exception:
+        await db.rollback()
+        await quota_service.release_reservation(
+            redis,
+            state=state,
+            org_id=context.org_id,
+            job_id=job_id,
+            credits=cost,
+        )
         raise
     await db.refresh(job)
-    return job, False
+    return job, False, state
 
 
 async def list_jobs(
@@ -166,14 +238,15 @@ async def get_job(db: AsyncSession, *, org_id: uuid.UUID, job_id: uuid.UUID) -> 
     return job
 
 
-async def cancel_job(db: AsyncSession, *, context: AuthContext, job_id: uuid.UUID) -> Job:
+async def cancel_job(
+    db: AsyncSession,
+    *,
+    context: AuthContext,
+    job_id: uuid.UUID,
+    redis: Redis,
+) -> Job:
     job = await get_job(db, org_id=context.org_id, job_id=job_id)
-    if job.status in {
-        JobStatus.SUCCEEDED,
-        JobStatus.FAILED,
-        JobStatus.CANCELLED,
-        JobStatus.TIMED_OUT,
-    }:
+    if job.status in TERMINAL_JOB_STATUSES:
         return job
     now = datetime.now(UTC)
     job.cancel_requested_at = now
@@ -201,6 +274,9 @@ async def cancel_job(db: AsyncSession, *, context: AuthContext, job_id: uuid.UUI
     )
     await db.commit()
     await db.refresh(job)
+    if job.status in TERMINAL_JOB_STATUSES:
+        await settle_job_usage(db, redis, job=job)
+        await db.refresh(job)
     return job
 
 

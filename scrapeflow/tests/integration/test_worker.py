@@ -210,8 +210,12 @@ def test_scrape_http_job_succeeds_and_stores_artifacts(
     assert result["status_code"] == 200
     assert {artifact["kind"] for artifact in artifacts} == {"html", "result"}
     root = Path(settings.artifacts_local_dir)
+    now = datetime.now(UTC)
     for artifact in artifacts:
         assert (root / artifact["storage_key"]).is_file()
+        # The default org is on the free plan (1-day retention), not the
+        # deployment-level 7-day fallback.
+        assert now + timedelta(hours=23) < artifact["expires_at"] < now + timedelta(hours=25)
 
 
 def test_pagination_collects_pages(client: Any, integration_settings: Settings) -> None:

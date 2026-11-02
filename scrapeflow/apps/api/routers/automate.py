@@ -56,7 +56,7 @@ async def submit_automation(
     idempotency: str | None = Depends(idempotency_key),
     _: None = Depends(org_rate_limit),
 ) -> JobAccepted:
-    job, replay = await automation_service.create_automation_job(
+    job, replay, quota = await automation_service.create_automation_job(
         db,
         context=context,
         request=body,
@@ -66,6 +66,7 @@ async def submit_automation(
         request_id=current_request_id() or None,
         idempotency_key=idempotency,
     )
+    response.headers.update(quota.headers())
     if replay:
         response.status_code = 200
         response.headers["Idempotent-Replay"] = "true"

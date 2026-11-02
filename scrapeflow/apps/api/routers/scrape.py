@@ -8,8 +8,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Request, Response
 from packages.core.db import get_db
 from packages.core.errors import AppError, ErrorCode
+from packages.core.redis import get_redis
 from packages.core.scopes import Scope
 from packages.core.settings import Settings
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import (
@@ -48,19 +50,22 @@ async def submit_scrape(
     response: Response,
     context: AuthContext = Depends(require_scope(Scope.SCRAPE_WRITE)),
     db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
     settings: Settings = Depends(get_app_settings),
     idempotency: str | None = Depends(idempotency_key),
     _: None = Depends(org_rate_limit),
 ) -> JobAccepted:
-    job, replay = await job_service.create_scrape_job(
+    job, replay, quota = await job_service.create_scrape_job(
         db,
         context=context,
         request=body,
         settings=settings,
         policy=request.app.state.ssrf_policy,
+        redis=redis,
         request_id=current_request_id() or None,
         idempotency_key=idempotency,
     )
+    response.headers.update(quota.headers())
     if replay:
         response.status_code = 200
         response.headers["Idempotent-Replay"] = "true"

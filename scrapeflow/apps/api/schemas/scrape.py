@@ -59,7 +59,7 @@ class ExtractOptions(BaseModel):
 
 class PaginationOptions(BaseModel):
     next_selector: SelectorSpec
-    max_pages: int = Field(default=2, ge=2, le=50)
+    max_pages: int = Field(default=2, ge=2, le=500)
 
     @model_validator(mode="after")
     def _next_selector_is_single(self) -> PaginationOptions:
