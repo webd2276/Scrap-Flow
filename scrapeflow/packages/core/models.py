@@ -1,4 +1,4 @@
-"""Relational models for tenancy, users, credentials, and audit."""
+"""Relational models for tenancy, credentials, jobs, and artifacts."""
 
 from __future__ import annotations
 
@@ -9,11 +9,13 @@ from typing import Any
 
 from sqlalchemy import (
     ARRAY,
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -37,6 +39,20 @@ class OrgPlan(StrEnum):
     STARTER = "starter"
     PRO = "pro"
     BUSINESS = "business"
+
+
+class JobKind(StrEnum):
+    SCRAPE = "scrape"
+    AUTOMATION = "automation"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
 
 
 ROLE_ENUM = Enum(
@@ -174,6 +190,120 @@ class AuditLog(Base):
     resource_id: Mapped[str | None] = mapped_column(String(64))
     ip_hash: Mapped[str | None] = mapped_column(String(64))
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+JOB_KIND_ENUM = Enum(
+    JobKind,
+    name="job_kind",
+    native_enum=False,
+    length=16,
+    values_callable=lambda values: [item.value for item in values],
+    validate_strings=True,
+)
+
+JOB_STATUS_ENUM = Enum(
+    JobStatus,
+    name="job_status",
+    native_enum=False,
+    length=16,
+    values_callable=lambda values: [item.value for item in values],
+    validate_strings=True,
+)
+
+TERMINAL_JOB_STATUSES: frozenset[JobStatus] = frozenset(
+    {
+        JobStatus.SUCCEEDED,
+        JobStatus.FAILED,
+        JobStatus.CANCELLED,
+        JobStatus.TIMED_OUT,
+    }
+)
+
+
+class Job(TimestampMixin, Base):
+    """Durable unit of work. Postgres is the source of truth; Redis is a broker."""
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        UniqueConstraint("org_id", "idempotency_key", name="uq_jobs_org_idempotency"),
+        Index("ix_jobs_org_created", "org_id", "created_at"),
+        Index("ix_jobs_status_lease", "status", "lease_expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    api_key_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("api_keys.id", ondelete="SET NULL")
+    )
+    kind: Mapped[JobKind] = mapped_column(JOB_KIND_ENUM, nullable=False)
+    status: Mapped[JobStatus] = mapped_column(
+        JOB_STATUS_ENUM, default=JobStatus.QUEUED, server_default=JobStatus.QUEUED.value
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(Text)
+    error_details: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128))
+    request_id: Mapped[str | None] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, default=2, server_default="2", nullable=False
+    )
+    worker_id: Mapped[str | None] = mapped_column(String(255))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_ms: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class JobEvent(Base):
+    __tablename__ = "job_events"
+    __table_args__ = (Index("ix_job_events_job_created", "job_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    type: Mapped[str] = mapped_column(String(48), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class Artifact(Base):
+    __tablename__ = "artifacts"
+    __table_args__ = (
+        Index("ix_artifacts_org_job", "org_id", "job_id"),
+        Index("ix_artifacts_expires", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

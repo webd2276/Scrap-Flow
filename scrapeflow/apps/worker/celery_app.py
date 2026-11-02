@@ -1,4 +1,4 @@
-"""Celery application. Tasks are added in later phases."""
+"""Celery application: job queue, reaper schedule, and durable delivery."""
 
 from __future__ import annotations
 
@@ -10,7 +10,11 @@ settings = get_settings()
 celery_app = Celery(
     "scrapeflow",
     broker=settings.redis_url,
-    include=["apps.worker.tasks.health"],
+    include=[
+        "apps.worker.tasks.health",
+        "apps.worker.tasks.jobs",
+        "apps.worker.tasks.reaper",
+    ],
 )
 
 celery_app.conf.update(
@@ -22,4 +26,19 @@ celery_app.conf.update(
     result_backend=None,
     timezone="UTC",
     enable_utc=True,
+    task_create_missing_queues=True,
+    task_default_queue="celery",
+    task_routes={
+        "scrapeflow.run_job": {"queue": "jobs"},
+        "scrapeflow.reap": {"queue": "celery"},
+    },
+    beat_schedule={
+        "reap-lost-jobs": {
+            "task": "scrapeflow.reap",
+            "schedule": float(settings.job_reaper_interval_seconds),
+        }
+    },
+    broker_transport_options={
+        "visibility_timeout": max(settings.job_lease_seconds * 2, 600),
+    },
 )

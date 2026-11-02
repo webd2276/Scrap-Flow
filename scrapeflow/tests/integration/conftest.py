@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
 import asyncpg
@@ -16,9 +18,19 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
 
 TRUNCATE_SQL = """
-TRUNCATE TABLE audit_logs, refresh_tokens, api_keys, memberships, users, organizations
+TRUNCATE TABLE job_events, artifacts, jobs, audit_logs, refresh_tokens, api_keys,
+  memberships, users, organizations
 RESTART IDENTITY CASCADE
 """
+
+
+class RecordingDispatcher:
+    def __init__(self) -> None:
+        self.enqueued: list[uuid.UUID] = []
+
+    def enqueue(self, job_id: uuid.UUID) -> bool:
+        self.enqueued.append(job_id)
+        return True
 
 
 class OkProbe:
@@ -62,7 +74,7 @@ def _schema(database_url: str) -> None:
 
 
 @pytest.fixture
-def integration_settings(database_url: str, redis_url: str) -> Settings:
+def integration_settings(database_url: str, redis_url: str, tmp_path: Path) -> Settings:
     return Settings(
         _env_file=None,
         app_env="test",
@@ -78,6 +90,7 @@ def integration_settings(database_url: str, redis_url: str) -> Settings:
         rate_limit_ip_per_minute=1000,
         rate_limit_org_burst=1000,
         rate_limit_org_per_minute=1000,
+        artifacts_local_dir=str(tmp_path / "artifacts"),
     )
 
 
@@ -100,8 +113,13 @@ def _clean(integration_settings: Settings) -> Iterator[None]:
 
 
 @pytest.fixture
-def client(integration_settings: Settings) -> Iterator[TestClient]:
-    app = create_app(integration_settings, probes=[OkProbe()])
+def dispatcher() -> RecordingDispatcher:
+    return RecordingDispatcher()
+
+
+@pytest.fixture
+def client(integration_settings: Settings, dispatcher: RecordingDispatcher) -> Iterator[TestClient]:
+    app = create_app(integration_settings, probes=[OkProbe()], dispatcher=dispatcher)
     with TestClient(app) as test_client:
         yield test_client
 

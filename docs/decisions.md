@@ -90,3 +90,45 @@ replica races. In production the API is not published; Caddy is the only
 ingress, so uvicorn may trust `X-Forwarded-For` from the compose network for
 per-IP limits. The development compose publishes the API directly and does not
 trust forwarded headers.
+
+## D-019 — PostgreSQL is the job source of truth; Redis is only a broker
+Alternatives: trust the broker for job state.
+Reason: enqueue can fail after the API commits. A dedicated reaper requeues
+stale `queued` rows and expires `running` leases, so acceptance is durable even
+when Redis blips. `attempts`/`max_attempts` bound retries, and a lost worker is
+reported as `WORKER_LOST` instead of silently dropping the job.
+
+## D-020 — Two independent SSRF checks, with a pinned connection
+Alternatives: validate once in the API and let httpx/Chrome resolve again.
+Reason: DNS can change between validation and connection (rebinding). The API
+validates before accepting work; the egress proxy resolves again at connection
+time and connects to the checked literal IP. HTTP redirects are validated per
+hop, and browser jobs re-validate the final URL. The proxy is the only egress
+path in compose, and its allowlist is restricted to `80,443`.
+
+## D-021 — Browsers run only in workers; remote Grid requires the proxy
+Alternatives: launch Chrome inside the API or let Grid reach the internet directly.
+Reason: the API process stays small and cannot exhaust memory with browsers,
+while Grid nodes have no direct egress. A remote Selenium URL without
+`EGRESS_PROXY_URL` is refused with `503` rather than silently bypassing checks.
+
+## D-022 — Server-generated artifact keys; presigned redirects with local fallback
+Alternatives: accept client filenames/keys.
+Reason: user-controlled storage keys enable traversal and cross-tenant reads.
+Keys are `org/job/uuid-sanitised-name`, checked for traversal before any local
+filesystem call. S3/MinIO responses use a short-lived presigned redirect; the
+local backend streams the file with `attachment`, `nosniff`, and `sandbox` CSP.
+Retention is plan-driven in later phases; Phase 3 stores `expires_at`.
+
+## D-023 — `screenshot` and `wait_for` require `render_js=true`
+Alternatives: silently ignore them on the HTTP path.
+Reason: explicit validation avoids a request that appears accepted but cannot
+produce the requested output. `proxy_country` is likewise rejected with `422`
+until a proxy provider exists (D-008), rather than pretending to route traffic.
+
+## D-024 — MinIO is added to compose, but the image tag is operator-supplied
+Alternatives: require Docker Hub `minio/minio`.
+Reason: MinIO discontinued its free community images during 2026. Compose uses
+`MINIO_IMAGE` with a pinned default and documents that operators must mirror the
+image. `scripts/ensure_bucket.py` creates the bucket with the application image,
+so no extra `mc` image is required.

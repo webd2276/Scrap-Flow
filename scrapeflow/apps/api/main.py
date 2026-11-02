@@ -12,20 +12,31 @@ from contextlib import asynccontextmanager
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from packages.core.artifacts import ArtifactStore
 from packages.core.checks import ReadinessProbe, build_default_probes
 from packages.core.db import create_engine, create_sessionmaker
 from packages.core.logging import configure_logging
 from packages.core.redis import create_redis
 from packages.core.settings import Settings, get_settings
+from packages.core.ssrf import SSRFPolicy
 
 from apps.api.errors import register_error_handlers
 from apps.api.middleware.request_context import RequestContextMiddleware
-from apps.api.routers import auth, health, keys
+from apps.api.routers import auth, health, jobs, keys, scrape
+from apps.api.services.dispatch import (
+    CeleryJobDispatcher,
+    JobDispatcher,
+    NullDispatcher,
+)
 
 
 def create_app(
     settings: Settings | None = None,
     probes: list[ReadinessProbe] | None = None,
+    *,
+    dispatcher: JobDispatcher | None = None,
+    artifact_store: ArtifactStore | None = None,
+    ssrf_policy: SSRFPolicy | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved)
@@ -61,6 +72,11 @@ def create_app(
     )
     app.state.settings = resolved
     app.state.probes = probes if probes is not None else build_default_probes(resolved)
+    app.state.dispatcher = dispatcher or (
+        CeleryJobDispatcher(resolved) if resolved.queue_enabled else NullDispatcher()
+    )
+    app.state.artifact_store = artifact_store or ArtifactStore(resolved)
+    app.state.ssrf_policy = ssrf_policy or SSRFPolicy(allowed_ports=resolved.egress_port_set)
 
     app.add_middleware(
         RequestContextMiddleware,
@@ -85,4 +101,6 @@ def create_app(
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(keys.router)
+    app.include_router(scrape.router)
+    app.include_router(jobs.router)
     return app

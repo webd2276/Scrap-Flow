@@ -59,6 +59,35 @@ class Settings(BaseSettings):
     rate_limit_auth_per_minute: int = Field(default=10, ge=1, le=1000)
     rate_limit_auth_burst: int = Field(default=10, ge=1, le=1000)
 
+    queue_enabled: bool = True
+    job_timeout_seconds: int = Field(default=120, ge=10, le=900)
+    job_lease_seconds: int = Field(default=180, ge=30, le=1800)
+    job_max_attempts: int = Field(default=2, ge=1, le=5)
+    job_reaper_interval_seconds: int = Field(default=30, ge=5, le=300)
+    job_queued_stale_seconds: int = Field(default=60, ge=10, le=600)
+    http_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    http_max_bytes: int = Field(default=5_000_000, ge=1024, le=20_000_000)
+    http_max_redirects: int = Field(default=5, ge=0, le=10)
+    http_user_agent: str = "ScrapeFlowBot/0.1 (+https://scrapeflow.example/bot)"
+
+    egress_proxy_url: str | None = None
+    egress_proxy_listen_host: str = "127.0.0.1"
+    egress_proxy_listen_port: int = Field(default=8888, ge=1, le=65535)
+    egress_allowed_ports: str = "80,443,8080,8443"
+    egress_connect_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    egress_idle_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    egress_max_header_bytes: int = Field(default=32_768, ge=1024, le=131_072)
+
+    browser_headless: bool = True
+    browser_no_sandbox: bool = False
+    browser_page_load_timeout_seconds: int = Field(default=60, ge=5, le=300)
+    session_registry_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+
+    artifacts_local_dir: str = "var/artifacts"
+    artifacts_retention_days: int = Field(default=7, ge=1, le=365)
+    artifacts_max_bytes: int = Field(default=10_000_000, ge=1024, le=100_000_000)
+    artifact_presign_seconds: int = Field(default=300, ge=60, le=3600)
+
     selenium_remote_url: str | None = None
     artifacts_endpoint: str | None = None
     artifacts_bucket: str = "scrapeflow"
@@ -77,6 +106,26 @@ class Settings(BaseSettings):
     stripe_price_pro: str | None = None
     stripe_price_business: str | None = None
 
+    @field_validator(
+        "selenium_remote_url",
+        "artifacts_endpoint",
+        "artifacts_access_key",
+        "artifacts_secret_key",
+        "sentry_dsn",
+        "egress_proxy_url",
+        "stripe_secret_key",
+        "stripe_webhook_secret",
+        "stripe_price_starter",
+        "stripe_price_pro",
+        "stripe_price_business",
+        mode="before",
+    )
+    @classmethod
+    def _empty_string_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("database_url")
     @classmethod
     def _normalise_database_url(cls, value: str) -> str:
@@ -94,6 +143,26 @@ class Settings(BaseSettings):
         if not value.startswith(("redis://", "rediss://", "unix://")):
             raise ValueError("REDIS_URL must be a Redis URL")
         return value
+
+    @field_validator("egress_proxy_url")
+    @classmethod
+    def _validate_egress_proxy_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("EGRESS_PROXY_URL must be an http(s) proxy URL")
+        return value.rstrip("/")
+
+    @field_validator("egress_allowed_ports")
+    @classmethod
+    def _validate_allowed_ports(cls, value: str) -> str:
+        ports = [part.strip() for part in value.split(",") if part.strip()]
+        if not ports:
+            raise ValueError("EGRESS_ALLOWED_PORTS must list at least one port")
+        for port in ports:
+            if not port.isdigit() or not 1 <= int(port) <= 65535:
+                raise ValueError(f"Invalid egress port: {port}")
+        return ",".join(ports)
 
     @field_validator("public_base_url")
     @classmethod
@@ -117,6 +186,22 @@ class Settings(BaseSettings):
         if self.jwt_active_kid in previous:
             raise ValueError("JWT_ACTIVE_KID must not also appear in JWT_PREVIOUS_KEYS")
         return self
+
+    @model_validator(mode="after")
+    def _validate_job_timing(self) -> Settings:
+        if self.job_lease_seconds < self.job_timeout_seconds + 30:
+            raise ValueError("JOB_LEASE_SECONDS must be at least JOB_TIMEOUT_SECONDS + 30")
+        return self
+
+    @model_validator(mode="after")
+    def _production_requires_object_storage(self) -> Settings:
+        if self.is_production and self.artifacts_endpoint is None:
+            raise ValueError("Production requires ARTIFACTS_ENDPOINT (S3/MinIO)")
+        return self
+
+    @property
+    def egress_port_set(self) -> frozenset[int]:
+        return frozenset(int(part) for part in self.egress_allowed_ports.split(",") if part)
 
     @property
     def jwt_previous_key_map(self) -> dict[str, str]:

@@ -130,3 +130,37 @@ Phase 2 explicit gaps carried forward:
 - `usage_ledger` is intentionally deferred to Phase 5 with quota accounting.
 - Role management/invite endpoints are not exposed yet; roles exist and are enforced.
 - Prometheus `/metrics`, Stripe, Selenium, schedules, webhooks, retention remain later phases.
+
+## Live delta after Phase 3 (2026-11-01)
+
+Phase 3 adds the durable scrape path. "Done" below means exercised by tests or a
+live process; browser/Grid items stay **Unverified** because Docker and Chrome
+are unavailable on this host.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-002 | Partial | HTTP scrape + pagination + CSS/XPath/attr/limits `apps/worker/scrape.py:294`, `apps/worker/extract.py`; Selenium runner `apps/worker/browser/runner.py`. Real browser UNVERIFIED (no Chrome/Grid). |
+| REQ-008 | Done | Celery task + beat reaper `apps/worker/celery_app.py`, `apps/worker/tasks/jobs.py:30`, `apps/worker/tasks/reaper.py:69`; live API→Redis→worker run succeeded 2026-11-01. |
+| REQ-009 | Partial | Remote webdriver only, proxy forced `apps/worker/browser/driver.py`; Grid service in compose. Real Grid session UNVERIFIED (Docker denied). |
+| REQ-014 | Done | 130 tests + 1 explicit browser skip, 78.68% coverage; live E2E scrape completed. |
+| REQ-017 | Done | API imports no Selenium/browser code; execution only in `apps/worker`. Dispatch boundary `apps/api/services/dispatch.py`. |
+| REQ-018 | Done | Deadline checks `apps/worker/scrape.py`, soft/hard limits `apps/worker/tasks/jobs.py:170`, watchdog `apps/worker/browser/driver.py`, lease reaper `apps/worker/tasks/reaper.py:69`; cancel polled per redirect/chunk. |
+| REQ-019 | Done | Durable `jobs`/`job_events`/`artifacts` `packages/core/models.py:226-303`; API `apps/api/routers/scrape.py:44`, `apps/api/routers/jobs.py:30-99`; migration round-trip verified. |
+| REQ-020 | Done | `(org_id, idempotency_key)` unique + replay semantics `apps/api/services/jobs.py:31`; integration test asserts 200 + `Idempotent-Replay`. |
+| REQ-021 | Partial | `render_js`, `wait_for`, screenshot, include_html, pagination, extract options `apps/api/schemas/scrape.py`. `proxy_country` intentionally rejected (422); webhook only validated, delivery is Phase 8. |
+| REQ-022 | Partial | Discriminated scrape schema done; automation step union is Phase 4. |
+| REQ-025 | Done | Result/HTML/screenshot artifacts with SHA-256 `apps/worker/scrape.py:106`, `packages/core/artifacts.py`; download headers verified live. |
+| REQ-042 | Done | API pre-validation + connection-time pinned proxy `packages/core/ssrf.py:99-205`, `apps/worker/egress_proxy.py:66`; per-hop redirects `apps/worker/http_fetch.py`; browser final URL revalidated. Live public fetch succeeded; private destination returned 403. |
+| REQ-043 | Partial | Compose adds internal `egress-proxy` and Selenium with no direct ingress; Grid/proxy containers UNVERIFIED (Docker denied). |
+| REQ-045 | Partial | URL/selector/header/page/text caps in schema + worker; response byte cap `apps/worker/http_fetch.py`; screenshot pixel cap not yet enforced. |
+| REQ-049 | Partial | All backend services read-only, `cap_drop: ALL`, `no-new-privileges`, tmpfs, mem/cpu limits; image build UNVERIFIED. |
+| REQ-057 | Done | Phase 3 revision `b93c4fa40230`; upgrade→check→downgrade base→re-upgrade verified on a disposable DB (`tests/integration/test_migrations.py`). |
+| REQ-067 | Done | 130 passed, 1 skipped (Chrome/Grid), 78.68% branch coverage. |
+| REQ-071 | Partial | `egress-proxy`, MinIO + bucket initializer, queue selection, Grid in dev/prod compose; `docker compose config` renders for both. Startup UNVERIFIED (Docker denied). |
+
+Phase 3 explicit gaps carried forward:
+- Real Selenium Grid + Chrome rendering/screenshot is UNVERIFIED on this host.
+- S3/MinIO upload, presign redirect, and bucket lifecycle are UNVERIFIED (no Docker/MinIO).
+- Webhook delivery/signing, robots.txt enforcement, AUP domain blocklist, quotas,
+  schedules, exports, and automation steps remain later phases.
+- `proxy_country` remains a 422 until a proxy provider is configured.

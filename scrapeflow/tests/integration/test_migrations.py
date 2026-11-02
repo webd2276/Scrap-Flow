@@ -92,6 +92,9 @@ def test_alembic_upgrade_creates_schema_and_matches_models(
             "api_keys",
             "refresh_tokens",
             "audit_logs",
+            "jobs",
+            "job_events",
+            "artifacts",
         }
         assert expected <= asyncio.run(tables())
 

@@ -5,6 +5,13 @@ x-backend: &backend
     context: .
     dockerfile: Dockerfile
   env_file: .env
+  environment:
+    SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
+    EGRESS_PROXY_URL: http://egress-proxy:8888
+    ARTIFACTS_ENDPOINT: http://minio:9000
+    ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET:-scrapeflow}
+    ARTIFACTS_ACCESS_KEY: ${MINIO_ROOT_USER:-scrapeflow}
+    ARTIFACTS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scrapeflow-dev-secret}
   restart: unless-stopped
   depends_on:
     postgres:
@@ -55,6 +62,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     mem_limit: 512m
@@ -64,10 +73,12 @@ services:
     <<: *backend
     command: ["alembic", "upgrade", "head"]
     restart: "no"
+    healthcheck:
+      disable: true
 
   worker:
     <<: *backend
-    command: ["celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=4"]
+    command: ["celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=4", "--queues=jobs,celery"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,8 +86,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     mem_limit: 1g
     cpus: 2.0
+    healthcheck:
+      disable: true
 
   beat:
     <<: *backend
@@ -90,6 +105,49 @@ services:
         condition: service_completed_successfully
     mem_limit: 256m
     cpus: 0.5
+    healthcheck:
+      disable: true
+
+  egress-proxy:
+    <<: *backend
+    command: ["python", "-m", "apps.worker.egress_proxy"]
+    environment:
+      EGRESS_PROXY_LISTEN_HOST: 0.0.0.0
+      EGRESS_PROXY_LISTEN_PORT: "8888"
+      EGRESS_ALLOWED_PORTS: "80,443"
+    expose: ["8888"]
+    mem_limit: 512m
+    cpus: 1.0
+    healthcheck:
+      disable: true
+
+  minio:
+    image: ${MINIO_IMAGE:-quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-scrapeflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-scrapeflow-dev-secret}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    networks: [app_net]
+
+  minio-init:
+    <<: *backend
+    command: ["python", "scripts/ensure_bucket.py"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    healthcheck:
+      disable: true
 
   selenium:
     image: selenium/standalone-chrome:4.25.0
@@ -109,6 +167,7 @@ services:
 volumes:
   pgdata:
   redisdata:
+  miniodata:
 
 networks:
   app_net:

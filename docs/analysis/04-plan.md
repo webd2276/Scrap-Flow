@@ -84,6 +84,7 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 - Security: Argon2id passwords, JWT HS256 with rotation-ready `kid`, key pepper from env, no key material in logs.
 
 ### Phase 3 — Durable jobs, worker, Grid, scrape, SSRF, artifacts (L)
+**Status (2026-11-01):** Implemented. Live API→Celery→Postgres HTTP scrape, artifacts, download, and events verified; 130 tests pass. Grid/browser and MinIO/S3 paths remain UNVERIFIED (Docker denied, no Chrome).
 **Goal:** production scrape path with durable jobs, isolated browser execution, hard timeout, reaper, typed errors, artifacts.
 - Files: `apps/worker/celery_app.py`, `tasks/jobs.py`, `tasks/reaper.py`, `browser/driver.py`, `browser/scrape.py`, `browser/extract.py`, `browser/pagination.py`, `packages/core/ssrf.py`, `apps/worker/egress_proxy.py`, `apps/api/routers/{scrape,jobs}.py`, `services/jobs.py`, `packages/core/artifacts.py`, compose Grid/proxy/MinIO.
 - Data: jobs(status, kind, payload JSONB, result JSONB, error_code, error_details, org_id, schedule_id, credits, timestamps, attempts, cancel_requested_at, request_id, idempotency_key), job_events, artifacts.
