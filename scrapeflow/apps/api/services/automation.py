@@ -6,7 +6,7 @@ import contextlib
 import uuid
 
 from packages.core.errors import AppError, ErrorCode
-from packages.core.models import Job, JobEvent, JobKind, JobStatus
+from packages.core.models import Job, JobEvent, JobKind, JobStatus, Organization
 from packages.core.plans import automation_credit_cost, plan_for
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy, validate_url
@@ -122,8 +122,18 @@ async def create_automation_job(
     redis: Redis,
     request_id: str | None,
     idempotency_key: str | None,
+    schedule_id: uuid.UUID | None = None,
+    commit: bool = True,
 ) -> tuple[Job, bool, quota_service.QuotaState]:
     target_url, walked = await _validate_request(request, settings=settings, policy=policy)
+    if request.webhook_url:
+        org = await db.get(Organization, context.org_id)
+        if org is None or org.webhook_secret_encrypted is None:
+            raise AppError(
+                422,
+                ErrorCode.VALIDATION_ERROR,
+                "Configure a webhook signing secret before using webhook_url",
+            )
     plan = plan_for(context.plan)
 
     if idempotency_key:
@@ -176,6 +186,7 @@ async def create_automation_job(
         org_id=context.org_id,
         created_by=context.user_id,
         api_key_id=context.api_key_id,
+        schedule_id=schedule_id,
         kind=JobKind.AUTOMATION,
         status=JobStatus.QUEUED,
         url=target_url,
@@ -240,7 +251,8 @@ async def create_automation_job(
                 "credits": cost,
             },
         )
-        await db.commit()
+        if commit:
+            await db.commit()
     except IntegrityError:
         await db.rollback()
         await _discard_secrets(redis, job_id)
@@ -273,7 +285,8 @@ async def create_automation_job(
         )
         raise
 
-    await db.refresh(job)
+    if commit:
+        await db.refresh(job)
     return job, False, state
 
 

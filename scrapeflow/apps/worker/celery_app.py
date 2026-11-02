@@ -16,6 +16,8 @@ celery_app = Celery(
         "apps.worker.tasks.reaper",
         "apps.worker.tasks.reconcile",
         "apps.worker.tasks.retention",
+        "apps.worker.tasks.schedules",
+        "apps.worker.tasks.webhooks",
     ],
 )
 
@@ -35,6 +37,8 @@ celery_app.conf.update(
         "scrapeflow.reap": {"queue": "celery"},
         "scrapeflow.reconcile_quotas": {"queue": "celery"},
         "scrapeflow.purge_artifacts": {"queue": "celery"},
+        "scrapeflow.dispatch_schedules": {"queue": "celery"},
+        "scrapeflow.deliver_webhooks": {"queue": "celery"},
     },
     beat_schedule={
         "reap-lost-jobs": {
@@ -48,6 +52,14 @@ celery_app.conf.update(
         "purge-expired-artifacts": {
             "task": "scrapeflow.purge_artifacts",
             "schedule": float(settings.artifact_retention_interval_seconds),
+        },
+        "dispatch-schedules": {
+            "task": "scrapeflow.dispatch_schedules",
+            "schedule": float(settings.schedule_dispatch_interval_seconds),
+        },
+        "deliver-webhooks": {
+            "task": "scrapeflow.deliver_webhooks",
+            "schedule": float(settings.webhook_dispatch_interval_seconds),
         },
     },
     broker_transport_options={

@@ -98,6 +98,9 @@ markers = [
 branch = true
 source = ["apps", "packages"]
 omit = ["*/celery_app.py"]
+# SQLAlchemy async sessions execute sync database work in greenlets; without
+# this, coverage misses statements around awaited session calls.
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
 show_missing = true

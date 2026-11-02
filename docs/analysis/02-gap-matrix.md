@@ -214,3 +214,29 @@ Phase 5 explicit gaps carried forward:
 - Selenium Grid + egress-proxy compose and MinIO/S3 upload/presign/lifecycle remain UNVERIFIED (Docker denied).
 - Screenshot pixel/byte caps and mid-step browser cancellation remain partial.
 - Plan downgrades do not retroactively lower an already-reserved period; limits apply to new reservations.
+
+## Live delta after Phase 6 (2026-11-02)
+
+Phase 6 adds recurring schedules, change detection, signed webhook delivery, and
+streaming exports. PostgreSQL+Redis integration tests cover dispatch, diffs,
+outbox retries/DLQ, signing, and export streaming; outbound HTTP receivers are
+mocked with `respx`. A live Celery Beat process and a real customer webhook
+endpoint remain **Unverified** on this host.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-004 | Partial | Schedules, run history, audit logs, and signed change notifications are present `apps/api/services/schedules.py`, `apps/worker/schedules.py`, `docs/decisions.md`; dashboard and full monitoring stack remain later phases. |
+| REQ-027 | Done | Cron/IANA-timezone validation and next-run calculation `packages/core/schedules.py`; CRUD/run-now API `apps/api/routers/schedules.py`; beat dispatcher with Redis lock and unique occurrence claim `apps/worker/schedules.py`, `apps/worker/tasks/schedules.py`. |
+| REQ-028 | Done | Watched dot/bracket paths, first-run baseline, and `appeared`/`disappeared`/`changed` diffs `packages/core/schedules.py`; snapshots stored on `schedule_runs`; `notify_on_change` gates webhook emission while history is always retained. |
+| REQ-029 | Done | Streaming CSV/JSON job and schedule exports `apps/api/routers/exports.py`, `packages/core/exporting.py`; tenant scoping, `Content-Disposition`, `nosniff`, and formula-injection escaping tested in `tests/integration/test_exports.py`. |
+| REQ-048 | Done | HTTPS-only endpoint registry, AES-GCM-sealed org secret returned once, deduped outbox, HMAC over `timestamp.body`, replay window, redirects disabled, jittered retries, DLQ, and delivery log `packages/core/webhooks.py`, `apps/worker/webhooks.py`; tests verify signatures against captured requests. |
+| REQ-057 | Done | Phase 6 revision `f62471a75878`; upgrade→check→downgrade→re-upgrade verified on a disposable PostgreSQL database. |
+| REQ-067 | Done | 265 passed, 2 skipped (Chrome/Grid and real-browser e2e), 82.32% branch coverage. |
+| REQ-075 | Done | New unit suites `test_schedule_helpers.py`, `test_webhook_signing.py`, `test_exporting.py` and integration suites `test_schedules.py`, `test_webhooks.py`, `test_exports.py`. |
+
+Phase 6 explicit gaps carried forward:
+- A live Celery Beat dispatch and a real external webhook receiver are UNVERIFIED; tests use the worker entry points directly and `respx`.
+- Webhook URLs are revalidated on every attempt and can use `EGRESS_PROXY_URL`, but connection-time pinning for webhook delivery is not independently verified.
+- Secret rotation replaces the signing secret immediately; there is no dual-secret grace window for deliveries signed just before rotation.
+- Export streaming is verified with bounded test fixtures, not a multi-hundred-thousand-row load test.
+- Email notifications remain deferred; webhooks are the implemented notification path (D-007).

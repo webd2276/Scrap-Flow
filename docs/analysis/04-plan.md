@@ -120,15 +120,16 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 - Unverified if no Stripe test keys: live checkout. Unit tests use test secrets; exact commands documented.
 
 ### Phase 6 — Schedules, change detection, signed webhooks, exports (L)
+**Status (2026-11-02):** Implemented. Cron/IANA-timezone schedules with schema-validated templates, at-most-once occurrence dispatch via unique `schedule_runs.run_key`, watched-field snapshots and `appeared`/`disappeared`/`changed` diffs, opt-out notification gating, HTTPS-only webhook registry, AES-GCM-sealed org signing secret returned once, durable deduped outbox with HMAC signing, jittered retries and DLQ, delivery log, and streaming job/schedule CSV+JSON exports with formula-injection escaping. 265 tests pass (2 infrastructure skips) with 82.32% branch coverage. Migration `f62471a75878` upgrade→check→downgrade→re-upgrade verified on a disposable DB.
 **Goal:** recurring monitoring with reliable notifications and streaming exports.
-- Files: `models/schedules.py`, `routers/{schedules,exports}.py`, `services/schedules.py`, `services/webhooks.py`, `tasks/{schedules,webhooks}.py`, migrations.
+- Files: `packages/core/{schedules,webhooks,exporting}.py`, `models` additions, `routers/{schedules,webhooks,exports}.py`, `services/{schedules,webhooks}.py`, `tasks/{schedules,webhooks}.py`, migration `f62471a75878`.
 - Schedules: cron + timezone validation (`croniter`), job template validated by same scrape/automate schemas, watched fields (dot/bracket paths), history, diffs (`price changed`, `appeared`, `disappeared`), enable/disable.
-- Webhooks: per-org secret (returned once, hashed at rest), outbox table, HMAC `sha256=...` over `timestamp.body`, headers, 5-min replay window, retries with jitter, DLQ, delivery log.
+- Webhooks: per-org secret (returned once, AES-256-GCM encrypted at rest because HMAC needs plaintext), HTTPS-only endpoint registry, deduped outbox table, HMAC `sha256=...` over `timestamp.body`, event/delivery headers, 5-min replay window, redirects disabled, capped response reads, retries with jitter, DLQ, delivery log.
 - Exports: `GET /v1/jobs/{id}/export?format=csv|json`, `GET /v1/schedules/{id}/export`; `StreamingResponse`; CSV formula-injection escaping; content-disposition.
 - Tests: cron next-run, timezone, schedule dispatch lock, diff cases, signed payload/timestamp/replay, retry/DLQ, tenant scoping, streaming large export, CSV injection.
-- Acceptance: schedule runs via beat; change fires signed webhook; duplicate delivery idempotent; export streams.
+- Acceptance: schedule runs via beat; change fires signed webhook; duplicate delivery idempotent; export streams. Verified through PostgreSQL+Redis integration tests and `respx` HTTP receivers. Scheduler beat execution and customer-facing webhook delivery are exercised by unit/integration tests, not a live compose deployment.
 - Depends: P3, P4. **Rollback:** disable beat schedule + revert.
-- Email: optional SMTP; without SMTP, event recorded and `email_skipped=true` (decision D-007).
+- Email: optional SMTP; without SMTP, event recorded and `email_skipped=true` (decision D-007). Email delivery remains UNVERIFIED / deferred; webhooks are the implemented notification path.
 
 ### Phase 7 — Proxy providers (M)
 **Goal:** pluggable, health-checked proxy assignment without evasion features.

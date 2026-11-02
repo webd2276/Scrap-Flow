@@ -224,3 +224,62 @@ pricing experiments. `STRIPE_PRICE_*`, `BILLING_SUCCESS_URL`,
 price returns `503 BILLING_ERROR` instead of creating a broken session. Billing
 is off by default (`BILLING_ENABLED=false`), while local quota accounting remains
 active so development and tests exercise the same admission path.
+
+## D-035 — Schedule occurrences are claimed by a unique run key
+Alternatives: hold a row lock across job creation, or let the dispatcher create
+the job and record history afterwards.
+Reason: a crash between creating the job and recording the run would either
+duplicate the job or lose history. The dispatcher first commits a `schedule_runs`
+row whose `run_key` (`cron:<schedule>:<scheduled_for>`) is unique, advances
+`next_run_at`, and only then creates the job. A retry or concurrent beat process
+cannot claim the same occurrence twice. A failed job-creation step is recorded as
+`skipped` on the already-claimed run, and quota/plan errors therefore remain
+visible instead of silently dropping an occurrence.
+
+## D-036 — Webhook signing secrets are encrypted, not hashed
+Alternatives: store only a hash and require the receiver to verify a derived
+value, or use a deployment-wide signing key.
+Reason: the worker must compute an HMAC over each delivery, so the secret has to
+be recoverable. Hashing would make that impossible. The secret is generated with
+`secrets.token_urlsafe(32)`, sealed with AES-256-GCM under a key derived from
+`WEBHOOK_SECRET_KEY`, bound to a webhook-specific associated-data label, and
+returned to the caller only on creation or rotation. It never appears in list
+responses, delivery rows, logs, or audit details.
+
+## D-037 — Webhooks use a durable outbox with per-event dedupe and a DLQ
+Alternatives: send inline from the worker's terminal-task path, or rely on the
+job row for retry state.
+Reason: inline delivery loses events when a worker dies and blocks job
+completion on a slow receiver. Each `(job, event, URL)` gets a unique
+`dedupe_key`, so re-running the terminal hook is idempotent. Delivery rows carry
+attempt count, next attempt, response status/body, and terminal `dead` state.
+Timeouts, `408`, `425`, `429`, and `5xx` retry with exponential jitter; other
+4xx responses are parked immediately. This also provides the customer-visible
+delivery log and makes retries observable.
+
+## D-038 — First schedule run is a baseline; notifications are opt-out
+Alternatives: notify on the first run, or only write history when notifications
+are enabled.
+Reason: without a previous snapshot every field would look "new", producing a
+noisy first notification. The first successful run stores `values` and no
+`changes`; later runs diff against the most recent earlier scheduled occurrence.
+`notify_on_change=false` suppresses only the `schedule.changed` webhook; history
+and diffs remain available for debugging and exports.
+
+## D-039 — Exports stream and neutralise spreadsheet formulas
+Alternatives: build the complete CSV/JSON in memory, or trust customer result
+strings.
+Reason: result sets can be large, so schedule exports stream rows from
+PostgreSQL and the response never materialises the full dataset. Any string cell
+whose first non-space character is `=`, `+`, `-`, or `@`, or that begins with a
+tab/CR, is prefixed with an apostrophe before CSV quoting. Filenames are reduced
+to an alphanumeric allowlist and responses set `nosniff` and `private, no-store`.
+
+## D-040 — Scheduled and ad-hoc webhooks require the org signing secret
+Alternatives: allow unsigned callbacks for convenience, or keep per-URL secrets.
+Reason: receivers need one stable verification key and a timestamped signature to
+reject replays. HTTPS is mandatory, and `webhook_url` on a scrape/automation
+request now returns `422` until the org has created an endpoint or rotated its
+secret. Schedules reject `webhook_url` and `secrets` outright, so recurring jobs
+cannot persist credentials or bypass the endpoint registry.
+

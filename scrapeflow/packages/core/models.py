@@ -8,7 +8,6 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
-    ARRAY,
     BigInteger,
     Boolean,
     DateTime,
@@ -22,7 +21,7 @@ from sqlalchemy import (
     Uuid,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from packages.core.db import Base
@@ -59,6 +58,21 @@ class UsageLedgerStatus(StrEnum):
     RESERVED = "reserved"
     COMMITTED = "committed"
     RELEASED = "released"
+
+
+class ScheduleRunStatus(StrEnum):
+    QUEUED = "queued"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+
+
+class WebhookDeliveryStatus(StrEnum):
+    PENDING = "pending"
+    DELIVERING = "delivering"
+    SUCCEEDED = "succeeded"
+    DEAD = "dead"
 
 
 ROLE_ENUM = Enum(
@@ -107,6 +121,8 @@ class Organization(TimestampMixin, Base):
     )
     billing_customer_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     billing_subscription_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    webhook_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    webhook_secret_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}")
 
 
@@ -247,6 +263,7 @@ class Job(TimestampMixin, Base):
         UniqueConstraint("org_id", "idempotency_key", name="uq_jobs_org_idempotency"),
         Index("ix_jobs_org_created", "org_id", "created_at"),
         Index("ix_jobs_status_lease", "status", "lease_expires_at"),
+        Index("ix_jobs_schedule_created", "schedule_id", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -258,6 +275,9 @@ class Job(TimestampMixin, Base):
     )
     api_key_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("api_keys.id", ondelete="SET NULL")
+    )
+    schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("schedules.id", ondelete="SET NULL")
     )
     kind: Mapped[JobKind] = mapped_column(JOB_KIND_ENUM, nullable=False)
     status: Mapped[JobStatus] = mapped_column(
@@ -378,3 +398,171 @@ class StripeEvent(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+SCHEDULE_RUN_STATUS_ENUM = Enum(
+    ScheduleRunStatus,
+    name="schedule_run_status",
+    native_enum=False,
+    length=16,
+    values_callable=lambda values: [item.value for item in values],
+    validate_strings=True,
+)
+
+WEBHOOK_DELIVERY_STATUS_ENUM = Enum(
+    WebhookDeliveryStatus,
+    name="webhook_delivery_status",
+    native_enum=False,
+    length=16,
+    values_callable=lambda values: [item.value for item in values],
+    validate_strings=True,
+)
+
+
+class Schedule(TimestampMixin, Base):
+    """A cron-triggered job template owned by one organization."""
+
+    __tablename__ = "schedules"
+    __table_args__ = (
+        Index("ix_schedules_due", "enabled", "next_run_at"),
+        Index("ix_schedules_org_created", "org_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    kind: Mapped[JobKind] = mapped_column(JOB_KIND_ENUM, nullable=False)
+    cron: Mapped[str] = mapped_column(String(120), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    template: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    watched_fields: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, server_default="[]", nullable=False
+    )
+    notify_on_change: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class ScheduleRun(Base):
+    """One dispatch attempt. ``values``/``changes`` hold the change snapshot."""
+
+    __tablename__ = "schedule_runs"
+    __table_args__ = (
+        UniqueConstraint("run_key", name="uq_schedule_runs_run_key"),
+        Index("ix_schedule_runs_schedule_created", "schedule_id", "created_at"),
+        Index("ix_schedule_runs_job", "job_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    schedule_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("schedules.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("jobs.id", ondelete="SET NULL"))
+    run_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    trigger: Mapped[str] = mapped_column(String(16), default="cron", server_default="cron")
+    status: Mapped[ScheduleRunStatus] = mapped_column(
+        SCHEDULE_RUN_STATUS_ENUM,
+        default=ScheduleRunStatus.QUEUED,
+        server_default=ScheduleRunStatus.QUEUED.value,
+        nullable=False,
+    )
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    values: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    changes: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WebhookEndpoint(TimestampMixin, Base):
+    """An org-owned HTTPS receiver subscribed to one or more event types."""
+
+    __tablename__ = "webhook_endpoints"
+    __table_args__ = (
+        UniqueConstraint("org_id", "url", name="uq_webhook_endpoints_org_url"),
+        Index("ix_webhook_endpoints_org", "org_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    events: Mapped[list[str]] = mapped_column(
+        ARRAY(String(64)),
+        default=list,
+        server_default="{}",
+        nullable=False,
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WebhookDelivery(Base):
+    """Durable outbox row for one signed webhook attempt series."""
+
+    __tablename__ = "webhook_deliveries"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_webhook_deliveries_dedupe_key"),
+        Index("ix_webhook_deliveries_due", "status", "next_attempt_at"),
+        Index("ix_webhook_deliveries_org_created", "org_id", "created_at"),
+        Index("ix_webhook_deliveries_endpoint_created", "endpoint_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    endpoint_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("webhook_endpoints.id", ondelete="SET NULL")
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[WebhookDeliveryStatus] = mapped_column(
+        WEBHOOK_DELIVERY_STATUS_ENUM,
+        default=WebhookDeliveryStatus.PENDING,
+        server_default=WebhookDeliveryStatus.PENDING.value,
+        nullable=False,
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, default=5, server_default="5", nullable=False
+    )
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    response_status: Mapped[int | None] = mapped_column(Integer)
+    response_body: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

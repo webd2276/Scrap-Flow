@@ -97,6 +97,10 @@ def test_alembic_upgrade_creates_schema_and_matches_models(
             "artifacts",
             "usage_ledger",
             "stripe_events",
+            "schedules",
+            "schedule_runs",
+            "webhook_endpoints",
+            "webhook_deliveries",
         }
         assert expected <= asyncio.run(tables())
 

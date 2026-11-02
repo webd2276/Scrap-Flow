@@ -91,6 +91,17 @@ class Settings(BaseSettings):
 
     quota_reconcile_interval_seconds: int = Field(default=600, ge=60, le=86_400)
 
+    schedule_dispatch_interval_seconds: int = Field(default=30, ge=5, le=3600)
+    schedule_dispatch_batch_size: int = Field(default=100, ge=1, le=1000)
+
+    webhook_dispatch_interval_seconds: int = Field(default=15, ge=5, le=3600)
+    webhook_delivery_batch_size: int = Field(default=100, ge=1, le=1000)
+    webhook_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    webhook_max_attempts: int = Field(default=5, ge=1, le=20)
+    webhook_backoff_seconds: int = Field(default=30, ge=1, le=3600)
+    webhook_tolerance_seconds: int = Field(default=300, ge=30, le=900)
+    webhook_max_response_bytes: int = Field(default=4096, ge=128, le=65536)
+
     artifacts_local_dir: str = "var/artifacts"
     artifacts_retention_days: int = Field(default=7, ge=1, le=365)
     artifacts_max_bytes: int = Field(default=10_000_000, ge=1024, le=100_000_000)

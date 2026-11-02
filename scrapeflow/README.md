@@ -4,13 +4,14 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 5 complete — plans, credits, quotas, and Stripe billing.**
-Phase 5 adds plan-based metering: atomic credit reservation at acceptance,
-Redis-backed concurrency leases, `X-Quota-*`/`X-Concurrency-*` headers, 402/429
-errors, settlement by the worker/reaper, reconciliation, artifact retention
-purging, and a Stripe billing surface (plans, usage, checkout, portal, signed
-webhook with event idempotency). Live Stripe checkout and Selenium Grid/MinIO
-compose paths remain **UNVERIFIED** (no Stripe test keys; Docker denied). See
+**Status: Phase 6 complete — schedules, change detection, signed webhooks, and exports.**
+Phase 6 adds cron-based recurring jobs with IANA timezones and schema-validated
+templates, at-most-once occurrence dispatch, watched-field snapshots and diffs,
+an org-level HMAC signing secret, a durable webhook outbox with retries/DLQ and a
+delivery log, and streaming CSV/JSON job and schedule exports with spreadsheet
+formula escaping. The full suite is 265 passed with 2 infrastructure skips and
+82.32% branch coverage. Live Stripe checkout, Selenium Grid, and MinIO/S3 compose
+paths remain **UNVERIFIED** (no Stripe test keys; Docker denied). See
 `docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Requirements
@@ -62,7 +63,7 @@ uv run uvicorn apps.api.asgi:app --reload --port 8000
 uv run celery -A apps.worker.celery_app worker --loglevel=INFO \
   --concurrency=1 --pool=solo --queues=jobs,celery
 
-# Beat (reaper + future schedules)
+# Beat (reaper, schedule dispatch, webhook delivery, retention, reconcile)
 uv run celery -A apps.worker.celery_app beat --loglevel=INFO \
   --schedule=/tmp/celerybeat-schedule
 ```
@@ -115,6 +116,22 @@ EGRESS_PROXY_LISTEN_HOST=127.0.0.1 EGRESS_PROXY_LISTEN_PORT=8888 \
 | POST | `/v1/billing/checkout` | `billing:manage` | create a Stripe checkout session |
 | POST | `/v1/billing/portal` | `billing:manage` | create a Stripe billing portal session |
 | POST | `/v1/billing/webhook` | Stripe signature | idempotent subscription lifecycle |
+| POST | `/v1/schedules` | `schedules:write` | create a cron schedule |
+| GET | `/v1/schedules` | `jobs:read` | list tenant schedules |
+| GET | `/v1/schedules/{id}` | `jobs:read` | schedule detail and next run |
+| PATCH | `/v1/schedules/{id}` | `schedules:write` | edit cron/timezone/template/enabled |
+| DELETE | `/v1/schedules/{id}` | `schedules:write` | delete a schedule |
+| POST | `/v1/schedules/{id}/run` | `schedules:write` | run a schedule immediately |
+| GET | `/v1/schedules/{id}/runs` | `jobs:read` | run history |
+| GET | `/v1/schedules/{id}/history` | `jobs:read` | alias for run history |
+| POST | `/v1/webhooks` | `schedules:write` | register an HTTPS endpoint |
+| GET | `/v1/webhooks` | `schedules:write` | list endpoints |
+| PATCH | `/v1/webhooks/{id}` | `schedules:write` | edit URL/events/enabled |
+| DELETE | `/v1/webhooks/{id}` | `schedules:write` | delete an endpoint |
+| POST | `/v1/webhooks/rotate-secret` | `schedules:write` | rotate the org signing secret |
+| GET | `/v1/webhooks/deliveries` | `jobs:read` | delivery log and DLQ state |
+| GET | `/v1/jobs/{id}/export?format=csv\|json` | `exports:read` | stream a job export |
+| GET | `/v1/schedules/{id}/export?format=csv\|json` | `exports:read` | stream schedule-run history |
 
 `POST /v1/scrape` accepts CSS/XPath selectors, `render_js`, `wait_for`,
 screenshots, HTML capture, bounded pagination, and request headers. Reusing an
@@ -186,6 +203,42 @@ retries a previously failed event. Checkout and portal require
 `billing:manage`; a portal request without a Stripe customer returns `409`.
 Artifacts are purged after the plan retention window by a beat task.
 
+### Schedules, change detection, webhooks, and exports
+
+Schedules store a cron expression, an IANA timezone, and a job template that is
+validated with the same `ScrapeRequest`/`AutomationRequest` schema used at
+submission. Automation templates may not embed `secrets`, and no schedule may
+use `webhook_url`; those values must go through the webhook registry. The beat
+dispatcher claims each due occurrence before creating the job: `schedule_runs`
+has a unique `run_key`, so a crashed or concurrent dispatcher cannot create two
+jobs for the same occurrence. Quota or plan failures are recorded as `skipped`
+runs with the typed error instead of silently disappearing.
+
+Watched fields use dot/bracket paths (`price.value`, `items[0].name`). The first
+successful run stores a baseline; later runs store `appeared`, `disappeared`, and
+`changed` diffs. `notify_on_change=false` still records history but suppresses
+`schedule.changed` webhooks.
+
+Webhook endpoints must be HTTPS and pass the same SSRF validator as scrape
+targets. Each org is limited to 20 endpoints so one tenant cannot multiply
+delivery fan-out without bound, and endpoint creation locks the org row so
+concurrent requests cannot mint competing signing secrets. The first endpoint
+(or an explicit rotate) generates a 32-byte org secret and returns it exactly
+once. The secret is encrypted at rest with
+AES-256-GCM under `WEBHOOK_SECRET_KEY` because HMAC needs the plaintext; it is
+never hashed, logged, or returned again. Deliveries are written to a durable
+outbox with a dedupe key, signed with
+`X-ScrapeFlow-Signature: sha256=<hmac(timestamp.body)>`, and retried with
+exponential jitter for timeouts, `408`, `425`, `429`, and `5xx` until
+`WEBHOOK_MAX_ATTEMPTS`, then parked in the dead-letter state. Each attempt
+revalidates the URL and can be inspected through the delivery log. A job-level
+`webhook_url` now requires a configured signing secret.
+
+Exports stream rows from PostgreSQL without loading the full result set. CSV
+cells are neutralised against spreadsheet formula injection (`=`, `+`, `-`, `@`,
+leading tab/CR), responses set `Content-Disposition` with a sanitised filename
+and `X-Content-Type-Options: nosniff`, and every export is tenant-scoped.
+
 ### Security model
 
 - The API validates scheme/port/host and denies non-global addresses before
@@ -206,6 +259,10 @@ Artifacts are purged after the plan retention window by a beat task.
   `JWT_SECRET`), binds the ciphertext to the job id, and the worker deletes the
   Redis key in a `finally` block. Retries only use the in-memory map for that
   execution, and failure messages are redacted.
+- Webhook signing secrets are encrypted at rest, returned only once, and never
+  logged. Endpoint URLs must be HTTPS and are revalidated before every delivery.
+  Signatures cover the timestamp and exact body with a bounded replay window;
+  redirects are disabled and response bodies are capped.
 
 Rate limits are atomic Redis token buckets per organisation and per IP, with
 `X-RateLimit-*` and `Retry-After` headers. Limits are configured in

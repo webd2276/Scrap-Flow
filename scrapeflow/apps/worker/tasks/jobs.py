@@ -26,6 +26,7 @@ from apps.worker import job_store
 from apps.worker.automate import AutomationOutcome, execute_automation
 from apps.worker.celery_app import celery_app
 from apps.worker.http_fetch import JobCancelledError
+from apps.worker.schedules import process_terminal_job
 from apps.worker.scrape import ProducedArtifact, execute_scrape
 
 logger = structlog.get_logger(__name__)
@@ -126,7 +127,7 @@ async def _finish_automation(
         return JobStatus.SUCCEEDED
 
 
-async def _run_job(
+async def _execute_job(
     job_id: uuid.UUID,
     worker_id: str,
     *,
@@ -290,6 +291,27 @@ async def _run_job(
             "status": JobStatus.FAILED.value,
             "error": ErrorCode.INTERNAL_ERROR.value,
         }
+
+
+async def _run_job(
+    job_id: uuid.UUID,
+    worker_id: str,
+    *,
+    settings: Settings | None = None,
+    policy: SSRFPolicy | None = None,
+) -> dict[str, Any]:
+    """Execute one job, then run post-terminal hooks without masking the result."""
+    settings = settings or get_settings()
+    maker = job_store.sessionmaker(settings)
+    try:
+        return await _execute_job(
+            job_id,
+            worker_id,
+            settings=settings,
+            policy=policy,
+        )
+    finally:
+        await process_terminal_job(maker, job_id=job_id, settings=settings)
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]

@@ -18,7 +18,8 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import create_async_engine
 
 TRUNCATE_SQL = """
-TRUNCATE TABLE stripe_events, usage_ledger, job_events, artifacts, jobs, audit_logs,
+TRUNCATE TABLE webhook_deliveries, webhook_endpoints, schedule_runs, schedules,
+  stripe_events, usage_ledger, job_events, artifacts, jobs, audit_logs,
   refresh_tokens, api_keys, memberships, users, organizations
 RESTART IDENTITY CASCADE
 """

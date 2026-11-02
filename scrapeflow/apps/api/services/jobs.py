@@ -13,6 +13,7 @@ from packages.core.models import (
     JobEvent,
     JobKind,
     JobStatus,
+    Organization,
 )
 from packages.core.plans import plan_for, scrape_credit_cost
 from packages.core.quota import settle_job_usage
@@ -49,6 +50,8 @@ async def create_scrape_job(
     redis: Redis,
     request_id: str | None,
     idempotency_key: str | None,
+    schedule_id: uuid.UUID | None = None,
+    commit: bool = True,
 ) -> tuple[Job, bool, quota_service.QuotaState]:
     if request.proxy_country is not None:
         raise AppError(
@@ -74,6 +77,13 @@ async def create_scrape_job(
                 422,
                 ErrorCode.VALIDATION_ERROR,
                 "Webhook URLs must use HTTPS",
+            )
+        org = await db.get(Organization, context.org_id)
+        if org is None or org.webhook_secret_encrypted is None:
+            raise AppError(
+                422,
+                ErrorCode.VALIDATION_ERROR,
+                "Configure a webhook signing secret before using webhook_url",
             )
 
     plan = plan_for(context.plan)
@@ -124,6 +134,7 @@ async def create_scrape_job(
         org_id=context.org_id,
         created_by=context.user_id,
         api_key_id=context.api_key_id,
+        schedule_id=schedule_id,
         kind=JobKind.SCRAPE,
         status=JobStatus.QUEUED,
         url=target.url,
@@ -164,7 +175,8 @@ async def create_scrape_job(
                 "credits": cost,
             },
         )
-        await db.commit()
+        if commit:
+            await db.commit()
     except IntegrityError:
         await db.rollback()
         await quota_service.release_reservation(
@@ -199,7 +211,8 @@ async def create_scrape_job(
             credits=cost,
         )
         raise
-    await db.refresh(job)
+    if commit:
+        await db.refresh(job)
     return job, False, state
 
 
