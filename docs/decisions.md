@@ -283,3 +283,36 @@ request now returns `422` until the org has created an endpoint or rotated its
 secret. Schedules reject `webhook_url` and `secrets` outright, so recurring jobs
 cannot persist credentials or bypass the endpoint registry.
 
+
+## D-041 — Upstream proxies chain behind the validating egress proxy
+Alternatives: configure Chrome/HTTP clients with the upstream proxy directly, or
+let providers bypass destination checks.
+Reason: giving the browser a provider URL would bypass connection-time
+resolution, private-address denial, and IP pinning. Instead the worker starts (or
+reuses) the validating egress proxy and attaches the per-job upstream to it. The
+proxy still resolves and checks the destination, then either tunnels `CONNECT`
+through the upstream or forwards absolute-form HTTP with
+`Proxy-Authorization`. Upstream failures carry
+`X-ScrapeFlow-Proxy-Upstream: 1`, which the worker maps to a retryable
+`proxy_failure` and never to a URL-validation error.
+
+## D-042 — Proxy credentials are operator configuration, results carry only ids
+Alternatives: store provider credentials per organisation, or return the chosen
+proxy URL for debugging.
+Reason: proxies are deployment infrastructure, not customer data, so the static
+list and gateway URL are environment settings held as `SecretStr`. Parsing
+validates scheme, host, port, and the optional country prefix without echoing
+the URL in errors. Endpoint ids are a provider/country plus a SHA-256 prefix, so
+two identical URLs collapse and a result can name the proxy without exposing
+credentials. URLs are excluded from `repr`; logs and results contain only
+`{id, provider, country}`. No CAPTCHA, stealth, or fingerprint features exist.
+
+## D-043 — Health and rotation state live in Redis with bounded retry
+Alternatives: keep per-worker state, probe on every request, or retry
+indefinitely.
+Reason: multiple workers must agree that an endpoint is unhealthy. Redis stores a
+round-robin counter, a short positive-health cache, and a cooldown key set on
+probe or request failure; `PROXY_ENABLED=false` remains the rollback path.
+Retries are capped by `PROXY_MAX_RETRIES` (default 2) and only fire for tagged
+proxy failures. Automation retries only when no mutating step (`click`, `type`,
+`press`, `select`) has succeeded, so a retry cannot repeat a side effect.

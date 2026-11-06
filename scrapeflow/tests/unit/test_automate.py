@@ -10,9 +10,12 @@ from apps.api.schemas.automation import AutomationRequest
 from apps.worker import automate
 from apps.worker.browser.runner import AutomationRun
 from apps.worker.browser.steps import StepRecord, StepRun, StepScreenshot
+from apps.worker.proxies import ProxyLease
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import Job, JobKind, JobStatus
+from packages.core.proxies import ProxyEndpoint
 from packages.core.settings import Settings
+from pydantic import SecretStr
 
 
 class NoCancel:
@@ -147,3 +150,166 @@ async def test_execute_automation_returns_failure_with_failure_screenshot(
         "result",
         "failure_screenshot",
     ]
+
+
+class FakeProxyAllocator:
+    instances: list[FakeProxyAllocator] = []
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        self.leases = [
+            ProxyLease(
+                ProxyEndpoint(
+                    id="static-de-1",
+                    provider="static",
+                    country="DE",
+                    url="http://user:secret@a.proxy:8080",
+                )
+            ),
+            ProxyLease(
+                ProxyEndpoint(
+                    id="static-de-2",
+                    provider="static",
+                    country="DE",
+                    url="http://user:secret@b.proxy:8080",
+                )
+            ),
+        ]
+        self.failed: list[str] = []
+        self.succeeded: list[str] = []
+        FakeProxyAllocator.instances.append(self)
+
+    async def acquire(self, country: str | None) -> ProxyLease:
+        assert country == "DE"
+        return self.leases.pop(0)
+
+    async def report_failure(self, lease: ProxyLease) -> None:
+        self.failed.append(lease.id)
+
+    async def report_success(self, lease: ProxyLease) -> None:
+        self.succeeded.append(lease.id)
+
+
+def _proxy_settings(tmp_path: Any) -> Settings:
+    return _settings(tmp_path).model_copy(
+        update={
+            "proxy_enabled": True,
+            "proxy_static_list": SecretStr("DE|http://a.proxy:8080,DE|http://b.proxy:8080"),
+            "proxy_health_check_enabled": False,
+        }
+    )
+
+
+def _proxy_failure() -> AppError:
+    return AppError(
+        502,
+        ErrorCode.UPSTREAM_ERROR,
+        "Browser navigation failed",
+        details={"retryable": True, "proxy_failure": True},
+    )
+
+
+@pytest.mark.asyncio
+async def test_automation_retries_with_a_different_proxy(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = AutomationRequest(
+        url="https://93.184.216.34/",
+        steps=[{"action": "goto", "url": "https://93.184.216.34/"}],
+        proxy_country="DE",
+    )
+    failed = AutomationRun(
+        final_url="https://93.184.216.34/",
+        html="<html></html>",
+        step_run=StepRun(),
+        failure=_proxy_failure(),
+    )
+    succeeded = AutomationRun(
+        final_url="https://93.184.216.34/",
+        html="<html><title>Ok</title></html>",
+        step_run=StepRun(records=[StepRecord("0", "goto", "ok", 1)]),
+    )
+    calls: list[str] = []
+
+    def fake_run(**kwargs: Any) -> AutomationRun:
+        calls.append(kwargs["proxy_url"])
+        return failed if len(calls) == 1 else succeeded
+
+    @asynccontextmanager
+    async def fake_proxy(*_args: Any, **_kwargs: Any) -> Any:
+        yield "http://127.0.0.1:9"
+
+    FakeProxyAllocator.instances.clear()
+    monkeypatch.setattr(automate, "ProxyAllocator", FakeProxyAllocator)
+    monkeypatch.setattr(automate, "egress_proxy", fake_proxy)
+    monkeypatch.setattr(automate, "CancelWatcher", NoCancel)
+    monkeypatch.setattr(automate, "load_secrets", lambda settings, job_id: {})
+    monkeypatch.setattr(automate, "delete_secrets", lambda settings, job_id: None)
+    monkeypatch.setattr(automate, "run_automation", fake_run)
+
+    outcome = await automate.execute_automation(
+        job=_job(request),
+        settings=_proxy_settings(tmp_path),
+        sessionmaker=None,  # type: ignore[arg-type]
+        deadline=time.monotonic() + 30,
+    )
+
+    assert len(calls) == 2
+    assert outcome.failure is None
+    assert outcome.result["proxy"] == {
+        "id": "static-de-2",
+        "provider": "static",
+        "country": "DE",
+    }
+    allocator = FakeProxyAllocator.instances[0]
+    assert allocator.failed == ["static-de-1"]
+    assert allocator.succeeded == ["static-de-2"]
+    assert "secret" not in str(outcome.result)
+
+
+@pytest.mark.asyncio
+async def test_automation_does_not_retry_after_a_mutating_step(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = AutomationRequest(
+        url="https://93.184.216.34/",
+        steps=[
+            {"action": "click", "selector": "#submit"},
+            {"action": "goto", "url": "https://93.184.216.34/next"},
+        ],
+        proxy_country="DE",
+    )
+    failed = AutomationRun(
+        final_url="https://93.184.216.34/",
+        html="<html></html>",
+        step_run=StepRun(records=[StepRecord("0", "click", "ok", 1)]),
+        failure=_proxy_failure(),
+    )
+    calls: list[str] = []
+
+    def fake_run(**kwargs: Any) -> AutomationRun:
+        calls.append(kwargs["proxy_url"])
+        return failed
+
+    @asynccontextmanager
+    async def fake_proxy(*_args: Any, **_kwargs: Any) -> Any:
+        yield "http://127.0.0.1:9"
+
+    FakeProxyAllocator.instances.clear()
+    monkeypatch.setattr(automate, "ProxyAllocator", FakeProxyAllocator)
+    monkeypatch.setattr(automate, "egress_proxy", fake_proxy)
+    monkeypatch.setattr(automate, "CancelWatcher", NoCancel)
+    monkeypatch.setattr(automate, "load_secrets", lambda settings, job_id: {})
+    monkeypatch.setattr(automate, "delete_secrets", lambda settings, job_id: None)
+    monkeypatch.setattr(automate, "run_automation", fake_run)
+
+    outcome = await automate.execute_automation(
+        job=_job(request),
+        settings=_proxy_settings(tmp_path),
+        sessionmaker=None,  # type: ignore[arg-type]
+        deadline=time.monotonic() + 30,
+    )
+
+    assert len(calls) == 1
+    assert outcome.failure is not None
+    assert outcome.result["proxy"]["id"] == "static-de-1"
+    assert FakeProxyAllocator.instances[0].failed == ["static-de-1"]

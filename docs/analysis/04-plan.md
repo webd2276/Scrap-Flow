@@ -132,11 +132,15 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 - Email: optional SMTP; without SMTP, event recorded and `email_skipped=true` (decision D-007). Email delivery remains UNVERIFIED / deferred; webhooks are the implemented notification path.
 
 ### Phase 7 — Proxy providers (M)
+**Status (2026-11-06):** Implemented. Static-list and authenticated rotating-gateway providers, per-job assignment with Redis round-robin, TCP health probes with cached positive results and failure cooldown, `proxy_country` validation at acceptance, bounded retry on a different endpoint after a tagged proxy failure, and credential redaction. Results record only `{id, provider, country}`. 227 unit tests and 68 integration tests pass (1 Chrome/Grid skip). A real commercial proxy provider and a live Grid/compose deployment remain **UNVERIFIED**; the gateway and retry paths are exercised with local fake upstreams.
 **Goal:** pluggable, health-checked proxy assignment without evasion features.
-- Files: `apps/worker/providers/base.py`, `static.py`, `gateway.py`, `services/proxies.py`, config.
-- Behavior: per-job acquire; `proxy_country` supported flag else 422; retry job network failure with a different proxy (max 2); health probes; metrics; never CAPTCHA/stealth/fingerprint.
-- Tests: provider selection, country unsupported, retry-on-failure, health failover, credential redaction, no proxy in logs.
-- Acceptance: forced proxy failure retries on a second proxy; results record proxy id (not credentials).
+- Files: `packages/core/proxies.py`, `apps/worker/proxies.py`, `apps/worker/providers/{base,static,gateway}.py`, `apps/api/services/proxies.py`, `apps/worker/egress_proxy.py`, `apps/worker/{scrape,automate}.py`.
+- Providers: `PROXY_STATIC_LIST` parses `[COUNTRY|]http(s)://[user:pass@]host:port`; `PROXY_GATEWAY_URL` supports one `{country}` placeholder with `PROXY_GATEWAY_COUNTRIES` and `PROXY_GATEWAY_DEFAULT_COUNTRY`. Exactly one provider is required when enabled.
+- Behavior: per-job acquire; `proxy_country` supported flag else 422; retry job network failure with a different proxy (max 2, `PROXY_MAX_RETRIES`); TCP health probes; Redis state (`sf:proxy:rr:*`, `sf:proxy:healthy:*`, `sf:proxy:down:*`); never CAPTCHA/stealth/fingerprint.
+- Chaining: the worker attaches the leased upstream to its validating egress proxy, which still resolves and checks the destination before using `CONNECT` or absolute-form HTTP with `Proxy-Authorization`; the upstream performs the final-hop connection. Upstream failures are tagged `X-ScrapeFlow-Proxy-Upstream: 1`.
+- Per-job + Grid: the worker-local proxy binds `EGRESS_JOB_PROXY_BIND_HOST` and advertises `EGRESS_JOB_PROXY_ADVERTISE_HOST`; compose uses `0.0.0.0`/`worker`. A loopback advertise host with remote Grid fails 503 rather than bypassing validation.
+- Tests: provider selection, country unsupported, retry-on-failure, health failover, credential redaction, no proxy in logs, upstream CONNECT/HTTP forwarding, automation retry safety, and an integration retry against a dead then live upstream.
+- Acceptance: forced proxy failure retries on a second proxy; results record proxy id (not credentials). Verified through unit tests plus PostgreSQL/Redis integration tests with a local fake upstream; a real gateway and Docker/Grid run are UNVERIFIED.
 - Depends: P3, P4. **Rollback:** `PROXY_ENABLED=false` static env fallback.
 
 ### Phase 8 — Dashboard (L)

@@ -26,6 +26,7 @@ from apps.api.schemas.automation import (
 )
 from apps.api.services import quota as quota_service
 from apps.api.services.audit import add_audit
+from apps.api.services.proxies import ensure_proxy_country
 from apps.api.services.secrets import delete_secrets, store_secrets
 
 
@@ -35,12 +36,7 @@ async def _validate_request(
     settings: Settings,
     policy: SSRFPolicy,
 ) -> tuple[str, list[tuple[AutomationStep, int]]]:
-    if request.proxy_country is not None:
-        raise AppError(
-            422,
-            ErrorCode.VALIDATION_ERROR,
-            f"Proxy country {request.proxy_country} is not available",
-        )
+    ensure_proxy_country(settings, request.proxy_country)
     if (
         request.timeout_seconds is not None
         and request.timeout_seconds > settings.job_timeout_seconds

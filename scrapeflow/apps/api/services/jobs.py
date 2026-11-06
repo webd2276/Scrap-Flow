@@ -34,6 +34,7 @@ from apps.api.schemas.scrape import (
 )
 from apps.api.services import quota as quota_service
 from apps.api.services.audit import add_audit
+from apps.api.services.proxies import ensure_proxy_country
 
 
 def ssrf_policy(settings: Settings) -> SSRFPolicy:
@@ -53,12 +54,7 @@ async def create_scrape_job(
     schedule_id: uuid.UUID | None = None,
     commit: bool = True,
 ) -> tuple[Job, bool, quota_service.QuotaState]:
-    if request.proxy_country is not None:
-        raise AppError(
-            422,
-            ErrorCode.VALIDATION_ERROR,
-            f"Proxy country {request.proxy_country} is not available",
-        )
+    ensure_proxy_country(settings, request.proxy_country)
     if (
         request.timeout_seconds is not None
         and request.timeout_seconds > settings.job_timeout_seconds

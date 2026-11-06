@@ -82,10 +82,19 @@ async def fetch_url(
                             if response.status_code in {400, 403, 444}
                             else ErrorCode.UPSTREAM_ERROR
                         )
+                        proxy_failure = (
+                            status == ErrorCode.UPSTREAM_ERROR
+                            and response.headers.get("x-scrapeflow-proxy-upstream") == "1"
+                        )
                         raise AppError(
                             422 if status == ErrorCode.BLOCKED_URL else 502,
                             status,
                             message or "Egress request was rejected",
+                            details=(
+                                {"retryable": True, "proxy_failure": True}
+                                if proxy_failure
+                                else None
+                            ),
                         )
 
                     if response.is_redirect:

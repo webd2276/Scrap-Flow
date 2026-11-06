@@ -78,6 +78,22 @@ class Settings(BaseSettings):
     egress_idle_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     egress_max_header_bytes: int = Field(default=32_768, ge=1024, le=131_072)
 
+    proxy_enabled: bool = False
+    proxy_static_list: SecretStr | None = None
+    proxy_gateway_url: SecretStr | None = None
+    proxy_gateway_countries: str = ""
+    proxy_gateway_default_country: str | None = None
+    proxy_max_retries: int = Field(default=2, ge=0, le=5)
+    proxy_health_check_enabled: bool = True
+    proxy_health_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    proxy_health_cache_seconds: int = Field(default=30, ge=1, le=300)
+    proxy_health_cooldown_seconds: int = Field(default=60, ge=1, le=3600)
+    # A worker-local validating proxy is started for per-job upstream proxies.
+    # When Grid runs in another container, advertise the worker's reachable
+    # hostname and bind to 0.0.0.0 so Grid can reach it.
+    egress_job_proxy_bind_host: str = "127.0.0.1"
+    egress_job_proxy_advertise_host: str | None = None
+
     browser_headless: bool = True
     browser_no_sandbox: bool = False
     browser_page_load_timeout_seconds: int = Field(default=60, ge=5, le=300)
@@ -138,6 +154,7 @@ class Settings(BaseSettings):
         "artifacts_secret_key",
         "sentry_dsn",
         "egress_proxy_url",
+        "egress_job_proxy_advertise_host",
         "automation_secret_key",
         "stripe_secret_key",
         "stripe_webhook_secret",
@@ -147,6 +164,9 @@ class Settings(BaseSettings):
         "billing_success_url",
         "billing_cancel_url",
         "billing_portal_return_url",
+        "proxy_static_list",
+        "proxy_gateway_url",
+        "proxy_gateway_default_country",
         mode="before",
     )
     @classmethod
@@ -181,6 +201,25 @@ class Settings(BaseSettings):
         if not value.startswith(("http://", "https://")):
             raise ValueError("EGRESS_PROXY_URL must be an http(s) proxy URL")
         return value.rstrip("/")
+
+    @field_validator("proxy_gateway_countries")
+    @classmethod
+    def _validate_proxy_gateway_countries(cls, value: str) -> str:
+        countries = [part.strip().upper() for part in value.split(",") if part.strip()]
+        for country in countries:
+            if not re.fullmatch(r"[A-Z]{2}", country):
+                raise ValueError("PROXY_GATEWAY_COUNTRIES must be comma-separated ISO codes")
+        return ",".join(countries)
+
+    @field_validator("proxy_gateway_default_country")
+    @classmethod
+    def _validate_proxy_gateway_default_country(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        country = value.strip().upper()
+        if not re.fullmatch(r"[A-Z]{2}", country):
+            raise ValueError("PROXY_GATEWAY_DEFAULT_COUNTRY must be a two-letter ISO code")
+        return country
 
     @field_validator("egress_allowed_ports")
     @classmethod
@@ -230,6 +269,42 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _validate_proxy_configuration(self) -> Settings:
+        if not self.proxy_enabled:
+            return self
+        if (self.proxy_static_list is None) == (self.proxy_gateway_url is None):
+            raise ValueError(
+                "PROXY_ENABLED requires exactly one of PROXY_STATIC_LIST or PROXY_GATEWAY_URL"
+            )
+        if self.proxy_static_list is not None:
+            from packages.core.proxies import parse_static_proxies
+
+            parse_static_proxies(self.proxy_static_list.get_secret_value())
+            return self
+        assert self.proxy_gateway_url is not None
+        gateway = self.proxy_gateway_url.get_secret_value()
+        if "{country}" in gateway:
+            if not self.proxy_gateway_country_list:
+                raise ValueError(
+                    "PROXY_GATEWAY_COUNTRIES is required when PROXY_GATEWAY_URL uses {country}"
+                )
+            if self.proxy_gateway_default_country is None:
+                raise ValueError(
+                    "PROXY_GATEWAY_DEFAULT_COUNTRY is required when "
+                    "PROXY_GATEWAY_URL uses {country}"
+                )
+            if self.proxy_gateway_default_country not in self.proxy_gateway_country_list:
+                raise ValueError(
+                    "PROXY_GATEWAY_DEFAULT_COUNTRY must be listed in PROXY_GATEWAY_COUNTRIES"
+                )
+        if "{" in gateway.replace("{country}", "") or "}" in gateway.replace("{country}", ""):
+            raise ValueError("PROXY_GATEWAY_URL supports only the {country} placeholder")
+        from packages.core.proxies import validate_proxy_url
+
+        validate_proxy_url(gateway.replace("{country}", "US"))
+        return self
+
+    @model_validator(mode="after")
     def _validate_job_timing(self) -> Settings:
         if self.job_lease_seconds < self.job_timeout_seconds + 30:
             raise ValueError("JOB_LEASE_SECONDS must be at least JOB_TIMEOUT_SECONDS + 30")
@@ -248,6 +323,10 @@ class Settings(BaseSettings):
     @property
     def egress_port_set(self) -> frozenset[int]:
         return frozenset(int(part) for part in self.egress_allowed_ports.split(",") if part)
+
+    @property
+    def proxy_gateway_country_list(self) -> tuple[str, ...]:
+        return tuple(country for country in self.proxy_gateway_countries.split(",") if country)
 
     @property
     def jwt_previous_key_map(self) -> dict[str, str]:

@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from packages.core.errors import AppError, ErrorCode
+from packages.core.proxies import looks_like_proxy_failure
 from packages.core.settings import Settings
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -107,6 +108,10 @@ def run_browser_page(
                     502,
                     ErrorCode.UPSTREAM_ERROR,
                     "Browser navigation failed",
+                    details={
+                        "retryable": True,
+                        "proxy_failure": looks_like_proxy_failure(exc),
+                    },
                 ) from exc
             if watchdog.fired:
                 raise AppError(504, ErrorCode.TIMEOUT, "Browser job exceeded its deadline")
@@ -161,12 +166,15 @@ def run_automation(
                     "Browser action timed out",
                     details={"retryable": False},
                 )
-            except WebDriverException:
+            except WebDriverException as exc:
                 failure = AppError(
                     502,
                     ErrorCode.UPSTREAM_ERROR,
                     "Browser action failed",
-                    details={"retryable": False},
+                    details={
+                        "retryable": True,
+                        "proxy_failure": looks_like_proxy_failure(exc),
+                    },
                 )
             except AppError as exc:
                 failure = exc

@@ -240,3 +240,26 @@ Phase 6 explicit gaps carried forward:
 - Secret rotation replaces the signing secret immediately; there is no dual-secret grace window for deliveries signed just before rotation.
 - Export streaming is verified with bounded test fixtures, not a multi-hundred-thousand-row load test.
 - Email notifications remain deferred; webhooks are the implemented notification path (D-007).
+
+## Live delta after Phase 7 (2026-11-06)
+
+Phase 7 adds pluggable upstream proxy providers behind the existing validating
+egress proxy. Unit tests cover parsing, gateway expansion, redaction, allocation,
+health failover, retry safety, and upstream CONNECT/HTTP forwarding. The
+integration test forces the first endpoint to a closed port and verifies the job
+succeeds through the second endpoint while recording only its id. A commercial
+proxy gateway, real provider credentials, and Docker/Grid compose remain
+**Unverified** on this host.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-021 | Done | `proxy_country` is validated at acceptance against the configured provider `apps/api/services/proxies.py`; unsupported countries return 422. Per-job upstreams are applied in `apps/worker/{scrape,automate}.py` without bypassing URL validation. |
+| REQ-038 | Done | Static and authenticated rotating-gateway providers `packages/core/proxies.py`, `apps/worker/providers/`; per-job round-robin and health state in Redis `apps/worker/proxies.py`; bounded retry on a different proxy after a tagged failure; credentials held as `SecretStr`, redacted from `repr`/logs, and replaced by hashed ids in results. |
+| REQ-067 | Done | 227 unit tests and 68 integration tests pass (1 Chrome/Grid skip). Proxy suites: `tests/unit/test_proxies.py`, `test_proxy_allocator.py`, `test_egress_proxy.py`, `test_automate.py`, and `tests/integration/test_proxy_retry.py`. |
+| REQ-075 | Done | New tests cover provider selection, unsupported country, retry, health failover, credential redaction, upstream CONNECT/HTTP forwarding, and automation retry safety. |
+
+Phase 7 explicit gaps carried forward:
+- No real commercial gateway or static proxy account was available; gateway expansion is unit-tested, not live-tested.
+- Docker/Selenium Grid compose paths remain UNVERIFIED; the worker-local proxy advertise path is unit-tested only.
+- Health probes are TCP-only and do not verify that a proxy can reach a specific target or that its credentials are accepted.
+- Proxy metrics are structured logs, not Prometheus series; the metrics phase remains P9.

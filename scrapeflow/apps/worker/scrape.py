@@ -17,16 +17,19 @@ import structlog
 from packages.core.artifacts import ArtifactStore, StoredArtifact
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import Job
+from packages.core.proxies import is_proxy_failure
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy, validate_url
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.api.schemas.scrape import ScrapeRequest
 from apps.worker.browser.runner import run_browser_page
-from apps.worker.egress_proxy import ProxyConfig, running_proxy
+from apps.worker.egress_proxy import ProxyConfig, UpstreamProxy, running_proxy
 from apps.worker.extract import extract_page, find_next_url
 from apps.worker.http_fetch import JobCancelledError, fetch_url
 from apps.worker.job_store import cancel_requested
+from apps.worker.proxies import ProxyAllocator, ProxyLease, ensure_browser_egress, proxy_metadata
 
 logger = structlog.get_logger(__name__)
 
@@ -88,17 +91,42 @@ def _remaining(deadline: float) -> float:
 
 
 @asynccontextmanager
-async def egress_proxy(settings: Settings, policy: SSRFPolicy) -> AsyncIterator[str]:
-    if settings.egress_proxy_url:
+async def egress_proxy(
+    settings: Settings,
+    policy: SSRFPolicy,
+    *,
+    upstream_url: str | None = None,
+) -> AsyncIterator[str]:
+    """Yield a validating proxy URL, optionally chained to an upstream proxy.
+
+    A shared ``EGRESS_PROXY_URL`` is used when no per-job upstream is selected.
+    Per-job providers need the upstream to vary by job, so the worker starts a
+    local validating proxy instead; that proxy still resolves and blocks private
+    destinations before contacting the upstream.
+    """
+    if settings.egress_proxy_url and upstream_url is None:
         yield settings.egress_proxy_url
         return
+    try:
+        upstream = UpstreamProxy.from_url(upstream_url) if upstream_url else None
+    except ValueError as exc:
+        raise AppError(
+            503,
+            ErrorCode.SERVICE_UNAVAILABLE,
+            "The assigned proxy configuration is invalid",
+        ) from exc
     config = ProxyConfig(
         policy=policy,
         connect_timeout=settings.egress_connect_timeout_seconds,
         idle_timeout=settings.egress_idle_timeout_seconds,
         max_header_bytes=settings.egress_max_header_bytes,
+        upstream_proxy=upstream,
     )
-    async with running_proxy(config) as url:
+    async with running_proxy(
+        config,
+        host=settings.egress_job_proxy_bind_host,
+        advertise_host=settings.egress_job_proxy_advertise_host,
+    ) as url:
         yield url
 
 
@@ -302,46 +330,86 @@ async def execute_scrape(
     policy = policy or SSRFPolicy(allowed_ports=settings.egress_port_set)
     cancel = CancelWatcher(sessionmaker, job.id)
     started = time.monotonic()
+    ensure_browser_egress(settings, render_js=scrape.render_js)
 
-    if scrape.render_js and settings.selenium_remote_url and not settings.egress_proxy_url:
-        raise AppError(
-            503,
-            ErrorCode.SERVICE_UNAVAILABLE,
-            "Browser jobs require EGRESS_PROXY_URL so Grid traffic is validated",
-        )
+    redis = (
+        Redis.from_url(settings.redis_url, decode_responses=True)
+        if settings.proxy_enabled
+        else None
+    )
+    allocator = ProxyAllocator(settings, redis)
+    pages: list[dict[str, Any]] = []
+    redirects: list[str] = []
+    screenshot_png: bytes | None = None
+    html_artifact: str | None = None
+    lease: ProxyLease | None = None
+    attempts = settings.proxy_max_retries + 1 if settings.proxy_enabled else 1
 
-    async with egress_proxy(settings, policy) as proxy_url:
-        if scrape.render_js:
-            pages, redirects, screenshot_png, first_html = await _fetch_pages_browser(
-                scrape,
-                settings=settings,
-                policy=policy,
-                proxy_url=proxy_url,
-                deadline=deadline,
-                cancel=cancel,
-                job_id=job.id,
-            )
-            html_artifact = first_html if scrape.include_html else None
-        else:
-            pages, redirects, first_html_bytes = await _fetch_pages_http(
-                scrape,
-                settings=settings,
-                policy=policy,
-                proxy_url=proxy_url,
-                deadline=deadline,
-                cancel=cancel,
-            )
-            screenshot_png = None
-            html_artifact = (
-                first_html_bytes.decode("utf-8", "replace")
-                if scrape.include_html and first_html_bytes is not None
-                else None
-            )
+    try:
+        for attempt in range(attempts):
+            lease = await allocator.acquire(scrape.proxy_country)
+            upstream_url = lease.url if lease is not None else None
+            try:
+                async with egress_proxy(
+                    settings,
+                    policy,
+                    upstream_url=upstream_url,
+                ) as proxy_url:
+                    if scrape.render_js:
+                        (
+                            pages,
+                            redirects,
+                            screenshot_png,
+                            first_html,
+                        ) = await _fetch_pages_browser(
+                            scrape,
+                            settings=settings,
+                            policy=policy,
+                            proxy_url=proxy_url,
+                            deadline=deadline,
+                            cancel=cancel,
+                            job_id=job.id,
+                        )
+                        html_artifact = first_html if scrape.include_html else None
+                    else:
+                        pages, redirects, first_html_bytes = await _fetch_pages_http(
+                            scrape,
+                            settings=settings,
+                            policy=policy,
+                            proxy_url=proxy_url,
+                            deadline=deadline,
+                            cancel=cancel,
+                        )
+                        screenshot_png = None
+                        html_artifact = (
+                            first_html_bytes.decode("utf-8", "replace")
+                            if scrape.include_html and first_html_bytes is not None
+                            else None
+                        )
+                if lease is not None:
+                    await allocator.report_success(lease)
+                break
+            except AppError as exc:
+                if lease is None or not is_proxy_failure(exc):
+                    raise
+                await allocator.report_failure(lease)
+                if attempt + 1 >= attempts or _remaining(deadline) <= 0.5:
+                    raise
+                logger.warning(
+                    "job.proxy_retry",
+                    job_id=str(job.id),
+                    proxy_id=lease.endpoint.id,
+                    attempt=attempt + 1,
+                )
+    finally:
+        if redis is not None:
+            await redis.aclose()
 
     result: dict[str, Any] = dict(pages[0])
     result["render_js"] = scrape.render_js
     result["redirects"] = redirects
     result["elapsed_ms"] = int((time.monotonic() - started) * 1000)
+    result["proxy"] = proxy_metadata(lease)
     if scrape.pagination is not None:
         result["pages"] = pages
 

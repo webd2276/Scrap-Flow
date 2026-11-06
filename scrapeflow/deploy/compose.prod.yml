@@ -52,6 +52,12 @@ services:
   worker:
     <<: *backend
     command: ["celery", "-A", "apps.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=8", "--max-tasks-per-child=100", "--queues=jobs,celery"]
+    # Per-job upstream proxies use a worker-local validating proxy that Grid
+    # must reach. Set the advertised host to a DNS name that resolves from the
+    # Grid container (the compose service name by default).
+    environment:
+      EGRESS_JOB_PROXY_BIND_HOST: 0.0.0.0
+      EGRESS_JOB_PROXY_ADVERTISE_HOST: ${EGRESS_JOB_PROXY_ADVERTISE_HOST:-worker}
     depends_on:
       postgres:
         condition: service_healthy

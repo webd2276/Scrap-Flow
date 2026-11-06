@@ -11,6 +11,7 @@ header caps, and no request transformation beyond removing hop-by-hop headers.
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import ipaddress
 import re
@@ -18,8 +19,8 @@ import signal
 import socket
 import ssl
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
-from urllib.parse import urlsplit
+from dataclasses import dataclass, field
+from urllib.parse import unquote, urlsplit
 
 import structlog
 from packages.core.errors import AppError
@@ -53,6 +54,58 @@ class ProxyError(Exception):
         self.message = message
 
 
+class UpstreamProxyError(ProxyError):
+    """A failure caused by the configured per-job upstream proxy."""
+
+
+@dataclass(frozen=True, slots=True)
+class UpstreamProxy:
+    """A trusted upstream proxy supplied by a configured provider.
+
+    Credentials are kept only in ``authorization`` and excluded from ``repr``.
+    """
+
+    host: str
+    port: int
+    use_tls: bool = False
+    authorization: str | None = field(default=None, repr=False)
+
+    @classmethod
+    def from_url(cls, url: str) -> UpstreamProxy:
+        try:
+            parts = urlsplit(url)
+            port = parts.port
+        except ValueError as exc:
+            raise ValueError("Malformed upstream proxy URL") from exc
+        if parts.scheme not in {"http", "https"}:
+            raise ValueError("Upstream proxy URL must use http or https")
+        if not parts.hostname:
+            raise ValueError("Upstream proxy URL must include a host")
+        if parts.path not in {"", "/"} or parts.query or parts.fragment:
+            raise ValueError("Upstream proxy URL must not include a path, query, or fragment")
+        resolved_port = port if port is not None else (443 if parts.scheme == "https" else 80)
+        if not 1 <= resolved_port <= 65535:
+            raise ValueError("Upstream proxy URL has an invalid port")
+        username = unquote(parts.username) if parts.username is not None else None
+        password = unquote(parts.password) if parts.password is not None else ""
+        authorization = None
+        if username is not None:
+            token = base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
+            authorization = f"Basic {token}"
+        return cls(
+            host=parts.hostname,
+            port=resolved_port,
+            use_tls=parts.scheme == "https",
+            authorization=authorization,
+        )
+
+    @property
+    def safe_url(self) -> str:
+        scheme = "https" if self.use_tls else "http"
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        return f"{scheme}://{host}:{self.port}"
+
+
 @dataclass(frozen=True, slots=True)
 class ProxyConfig:
     policy: SSRFPolicy
@@ -61,6 +114,7 @@ class ProxyConfig:
     idle_timeout: float = 30.0
     max_header_bytes: int = 32_768
     max_request_body_bytes: int = 1_048_576
+    upstream_proxy: UpstreamProxy | None = None
 
 
 class EgressProxy:
@@ -70,10 +124,12 @@ class EgressProxy:
         *,
         host: str = "127.0.0.1",
         port: int = 0,
+        advertise_host: str | None = None,
     ) -> None:
         self._config = config
         self._host = host
         self._requested_port = port
+        self._advertise_host = advertise_host or host
         self._server: asyncio.AbstractServer | None = None
         self._port = 0
         self._ssl = ssl.create_default_context()
@@ -84,7 +140,8 @@ class EgressProxy:
 
     @property
     def url(self) -> str:
-        return f"http://{self._host}:{self._port}"
+        host = f"[{self._advertise_host}]" if ":" in self._advertise_host else self._advertise_host
+        return f"http://{host}:{self._port}"
 
     async def start(self) -> EgressProxy:
         self._server = await asyncio.start_server(
@@ -123,6 +180,8 @@ class EgressProxy:
                 await self._handle_connect(target, reader, writer)
             else:
                 await self._handle_http(method, target, headers, reader, writer)
+        except UpstreamProxyError as exc:
+            await self._write_error(writer, exc.status, exc.message, upstream=True)
         except ProxyError as exc:
             await self._write_error(writer, exc.status, exc.message)
         except AppError as exc:
@@ -188,7 +247,12 @@ class EgressProxy:
     ) -> None:
         host, port = self._split_authority(authority)
         ips = await resolve_allowed_ips(host, port, self._config.policy, self._config.resolver)
-        upstream_reader, upstream_writer = await self._connect_pinned(ips, port)
+        if self._config.upstream_proxy is None:
+            upstream_reader, upstream_writer = await self._connect_pinned(ips, port)
+        else:
+            upstream_reader, upstream_writer = await self._connect_via_upstream(
+                _format_authority(host, port)
+            )
         client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
         await client_writer.drain()
         try:
@@ -214,18 +278,30 @@ class EgressProxy:
         if content_length > self._config.max_request_body_bytes:
             raise ProxyError(413, "Request body too large")
 
-        upstream_reader, upstream_writer = await self._connect_pinned(
-            resolved.ips,
-            resolved.port,
-            tls_hostname=resolved.host if resolved.scheme == "https" else None,
-        )
-        try:
+        upstream = self._config.upstream_proxy
+        if upstream is not None:
+            if resolved.scheme == "https":
+                raise ProxyError(400, "HTTPS requests must use CONNECT")
+            upstream_reader, upstream_writer = await self._connect_upstream_direct()
+            request_target = resolved.url
+        else:
+            upstream_reader, upstream_writer = await self._connect_pinned(
+                resolved.ips,
+                resolved.port,
+                tls_hostname=resolved.host if resolved.scheme == "https" else None,
+            )
             path = urlsplit(resolved.url)
-            origin_form = path.path or "/"
+            request_target = path.path or "/"
             if path.query:
-                origin_form = f"{origin_form}?{path.query}"
-            request = [f"{method} {origin_form} HTTP/1.1".encode("latin-1")]
+                request_target = f"{request_target}?{path.query}"
+        try:
+            request = [f"{method} {request_target} HTTP/1.1".encode("latin-1")]
             request.extend(headers)
+            if upstream is not None and upstream.authorization is not None:
+                request.insert(
+                    1,
+                    f"Proxy-Authorization: {upstream.authorization}".encode("latin-1"),
+                )
             upstream_writer.write(_CRLF.join(request) + _CRLF + _CRLF)
             await upstream_writer.drain()
 
@@ -306,6 +382,84 @@ class EgressProxy:
                 return length
         return 0
 
+    async def _connect_upstream_direct(
+        self,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        upstream = self._config.upstream_proxy
+        if upstream is None:  # pragma: no cover - guarded by callers
+            raise UpstreamProxyError(502, "Upstream proxy is not configured")
+        try:
+            return await asyncio.wait_for(
+                asyncio.open_connection(
+                    upstream.host,
+                    upstream.port,
+                    ssl=self._ssl if upstream.use_tls else None,
+                    server_hostname=upstream.host if upstream.use_tls else None,
+                    limit=65_536,
+                ),
+                timeout=self._config.connect_timeout,
+            )
+        except (OSError, TimeoutError) as exc:
+            raise UpstreamProxyError(502, "Upstream proxy connection failed") from exc
+
+    async def _connect_via_upstream(
+        self, authority: str
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        reader, writer = await self._connect_upstream_direct()
+        try:
+            await self._establish_upstream_tunnel(writer, reader, authority)
+        except Exception:
+            with contextlib.suppress(Exception):
+                writer.close()
+                await writer.wait_closed()
+            raise
+        return reader, writer
+
+    async def _establish_upstream_tunnel(
+        self,
+        writer: asyncio.StreamWriter,
+        reader: asyncio.StreamReader,
+        authority: str,
+    ) -> None:
+        upstream = self._config.upstream_proxy
+        if upstream is None:  # pragma: no cover - guarded by callers
+            raise UpstreamProxyError(502, "Upstream proxy is not configured")
+        lines = [
+            f"CONNECT {authority} HTTP/1.1",
+            f"Host: {authority}",
+            "Proxy-Connection: close",
+        ]
+        if upstream.authorization is not None:
+            lines.append(f"Proxy-Authorization: {upstream.authorization}")
+        writer.write(_CRLF.join(line.encode("latin-1") for line in lines) + _CRLF + _CRLF)
+        await writer.drain()
+        try:
+            status_line = await asyncio.wait_for(
+                reader.readline(), timeout=self._config.idle_timeout
+            )
+        except (OSError, TimeoutError) as exc:
+            raise UpstreamProxyError(502, "Upstream proxy did not respond") from exc
+        if not status_line:
+            raise UpstreamProxyError(502, "Upstream proxy closed the connection")
+        parts = status_line.decode("latin-1").rstrip("\r\n").split(" ", 2)
+        if len(parts) < 2 or not parts[1].isdigit():
+            raise UpstreamProxyError(502, "Upstream proxy returned a malformed response")
+        total = len(status_line)
+        while True:
+            try:
+                raw = await asyncio.wait_for(reader.readline(), timeout=self._config.idle_timeout)
+            except (OSError, TimeoutError) as exc:
+                raise UpstreamProxyError(502, "Upstream proxy did not respond") from exc
+            if not raw:
+                raise UpstreamProxyError(502, "Upstream proxy closed the connection")
+            total += len(raw)
+            if total > self._config.max_header_bytes:
+                raise UpstreamProxyError(502, "Upstream proxy headers too large")
+            if raw in {_CRLF, b"\n"}:
+                break
+        if int(parts[1]) != 200:
+            raise UpstreamProxyError(502, "Upstream proxy refused the connection")
+
     async def _connect_pinned(
         self,
         ips: tuple[str, ...],
@@ -344,6 +498,10 @@ class EgressProxy:
             raise ProxyError(502, "Empty upstream response")
         if not status_line.endswith(b"\n"):
             raise ProxyError(502, "Incomplete upstream response")
+        if self._config.upstream_proxy is not None:
+            parts = status_line.decode("latin-1").split(" ", 2)
+            if len(parts) >= 2 and parts[1] == "407":
+                raise UpstreamProxyError(502, "Upstream proxy authentication failed")
         headers: list[bytes] = []
         total = len(status_line)
         while True:
@@ -481,7 +639,14 @@ class EgressProxy:
             raise ProxyError(400, "Invalid CONNECT authority")
         return host, port
 
-    async def _write_error(self, writer: asyncio.StreamWriter, status: int, message: str) -> None:
+    async def _write_error(
+        self,
+        writer: asyncio.StreamWriter,
+        status: int,
+        message: str,
+        *,
+        upstream: bool = False,
+    ) -> None:
         reason = {
             400: "Bad Request",
             403: "Forbidden",
@@ -494,10 +659,12 @@ class EgressProxy:
             502: "Bad Gateway",
         }.get(status, "Error")
         body = message.encode("utf-8", "replace")
+        upstream_header = "X-ScrapeFlow-Proxy-Upstream: 1\r\n" if upstream else ""
         response = (
             f"HTTP/1.1 {status} {reason}\r\n"
             "Content-Type: text/plain; charset=utf-8\r\n"
             "X-ScrapeFlow-Proxy-Error: 1\r\n"
+            f"{upstream_header}"
             f"Content-Length: {len(body)}\r\n"
             "Connection: close\r\n\r\n"
         ).encode("latin-1") + body
@@ -509,6 +676,11 @@ class EgressProxy:
 def _canonical_ip(raw: str) -> str:
     address = ipaddress.ip_address(raw.split("%", 1)[0])
     return str(address)
+
+
+def _format_authority(host: str, port: int) -> str:
+    formatted = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    return f"{formatted}:{port}"
 
 
 def _response_content_length(headers: list[bytes]) -> int | None:
@@ -531,8 +703,14 @@ def _response_is_chunked(headers: list[bytes]) -> bool:
 
 
 @contextlib.asynccontextmanager
-async def running_proxy(config: ProxyConfig) -> AsyncIterator[str]:
-    proxy = EgressProxy(config)
+async def running_proxy(
+    config: ProxyConfig,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    advertise_host: str | None = None,
+) -> AsyncIterator[str]:
+    proxy = EgressProxy(config, host=host, port=port, advertise_host=advertise_host)
     await proxy.start()
     try:
         yield proxy.url

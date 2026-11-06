@@ -11,11 +11,14 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
+import structlog
 from packages.core.artifacts import ArtifactStore
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import Job
+from packages.core.proxies import is_proxy_failure
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy, validate_url
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from apps.api.schemas.automation import AutomationRequest
@@ -23,8 +26,11 @@ from apps.worker.browser.runner import AutomationRun, run_automation
 from apps.worker.browser.steps import StepScreenshot
 from apps.worker.extract import extract_page
 from apps.worker.http_fetch import JobCancelledError
+from apps.worker.proxies import ProxyAllocator, ProxyLease, ensure_browser_egress, proxy_metadata
 from apps.worker.scrape import CancelWatcher, ProducedArtifact, egress_proxy
 from apps.worker.secrets import delete_secrets, load_secrets
+
+logger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +122,14 @@ def _failure_result(run: AutomationRun, started: float) -> dict[str, Any]:
     return {**run.step_run.as_dict(), **payload}
 
 
+def _automation_retry_safe(run: AutomationRun) -> bool:
+    """Only retry before an automation step has changed remote state."""
+    mutating = {"click", "type", "press", "select"}
+    return not any(
+        record.status == "ok" and record.action in mutating for record in run.step_run.records
+    )
+
+
 async def execute_automation(
     *,
     job: Job,
@@ -127,42 +141,93 @@ async def execute_automation(
     request = AutomationRequest.model_validate(job.payload)
     policy = policy or SSRFPolicy(allowed_ports=settings.egress_port_set)
     started = time.monotonic()
-
-    if settings.selenium_remote_url and not settings.egress_proxy_url:
-        raise AppError(
-            503,
-            ErrorCode.SERVICE_UNAVAILABLE,
-            "Browser jobs require EGRESS_PROXY_URL so Grid traffic is validated",
-        )
+    ensure_browser_egress(settings, render_js=True)
 
     cancel = CancelWatcher(sessionmaker, job.id)
     if await cancel():
         raise JobCancelledError
 
     secrets = await asyncio.to_thread(load_secrets, settings, job.id)
-    run: AutomationRun
+    redis = (
+        Redis.from_url(settings.redis_url, decode_responses=True)
+        if settings.proxy_enabled
+        else None
+    )
+    allocator = ProxyAllocator(settings, redis)
+    attempts = settings.proxy_max_retries + 1 if settings.proxy_enabled else 1
+    lease: ProxyLease | None = None
+    run: AutomationRun | None = None
     try:
-        async with egress_proxy(settings, policy) as proxy_url:
-            remaining = _remaining(deadline)
+        for attempt in range(attempts):
+            lease = await allocator.acquire(request.proxy_country)
+            upstream_url = lease.url if lease is not None else None
             try:
-                run = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        partial(
-                            run_automation,
-                            settings=settings,
-                            job_id=job.id,
-                            request=request,
-                            secrets=secrets,
-                            timeout_seconds=remaining,
-                            proxy_url=proxy_url,
+                async with egress_proxy(
+                    settings,
+                    policy,
+                    upstream_url=upstream_url,
+                ) as proxy_url:
+                    remaining = _remaining(deadline)
+                    try:
+                        candidate = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                partial(
+                                    run_automation,
+                                    settings=settings,
+                                    job_id=job.id,
+                                    request=request,
+                                    secrets=secrets,
+                                    timeout_seconds=remaining,
+                                    proxy_url=proxy_url,
+                                )
+                            ),
+                            timeout=remaining + 5,
                         )
-                    ),
-                    timeout=remaining + 5,
+                    except TimeoutError as exc:
+                        raise AppError(
+                            504, ErrorCode.TIMEOUT, "Automation job exceeded its deadline"
+                        ) from exc
+            except AppError as exc:
+                if lease is None or not is_proxy_failure(exc):
+                    raise
+                await allocator.report_failure(lease)
+                if attempt + 1 >= attempts or _remaining(deadline) <= 0.5:
+                    raise
+                logger.warning(
+                    "job.proxy_retry",
+                    job_id=str(job.id),
+                    proxy_id=lease.endpoint.id,
+                    attempt=attempt + 1,
                 )
-            except TimeoutError as exc:
-                raise AppError(
-                    504, ErrorCode.TIMEOUT, "Automation job exceeded its deadline"
-                ) from exc
+                continue
+
+            run = candidate
+            proxy_failed = run.failure is not None and is_proxy_failure(run.failure)
+            if (
+                proxy_failed
+                and lease is not None
+                and attempt + 1 < attempts
+                and _automation_retry_safe(run)
+                and _remaining(deadline) > 0.5
+            ):
+                assert lease is not None
+                await allocator.report_failure(lease)
+                logger.warning(
+                    "job.proxy_retry",
+                    job_id=str(job.id),
+                    proxy_id=lease.endpoint.id,
+                    attempt=attempt + 1,
+                )
+                continue
+            if lease is not None:
+                if proxy_failed:
+                    await allocator.report_failure(lease)
+                else:
+                    await allocator.report_success(lease)
+            break
+
+        if run is None:  # pragma: no cover - the loop either breaks or raises
+            raise AppError(503, ErrorCode.SERVICE_UNAVAILABLE, "Automation did not run")
 
         final = await validate_url(run.final_url or job.url, policy)
         page = extract_page(
@@ -180,6 +245,7 @@ async def execute_automation(
                 "elapsed_ms": int((time.monotonic() - started) * 1000),
                 "steps": run.step_run.as_dict()["steps"],
                 "extracted": run.step_run.extracted,
+                "proxy": proxy_metadata(lease),
             }
         )
         if run.failure is not None:
@@ -197,6 +263,8 @@ async def execute_automation(
         )
         return AutomationOutcome(result=result, artifacts=artifacts, failure=run.failure)
     finally:
+        if redis is not None:
+            await redis.aclose()
         # TTL-bounded; never mask the execution result.
         with contextlib.suppress(Exception):
             await asyncio.to_thread(delete_secrets, settings, job.id)

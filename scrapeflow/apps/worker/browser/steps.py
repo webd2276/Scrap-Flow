@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 from packages.core.errors import AppError, ErrorCode
+from packages.core.proxies import looks_like_proxy_failure
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
     InvalidSelectorException,
@@ -475,7 +476,11 @@ def _wrap(error: Exception, *, selector: str | None = None, retryable: bool = Fa
         502,
         ErrorCode.UPSTREAM_ERROR,
         "Browser action failed",
-        details={"retryable": True, **({"selector": selector} if selector else {})},
+        details={
+            "retryable": True,
+            "proxy_failure": looks_like_proxy_failure(error),
+            **({"selector": selector} if selector else {}),
+        },
     )
 
 

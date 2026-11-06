@@ -4,14 +4,17 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 6 complete — schedules, change detection, signed webhooks, and exports.**
-Phase 6 adds cron-based recurring jobs with IANA timezones and schema-validated
-templates, at-most-once occurrence dispatch, watched-field snapshots and diffs,
-an org-level HMAC signing secret, a durable webhook outbox with retries/DLQ and a
-delivery log, and streaming CSV/JSON job and schedule exports with spreadsheet
-formula escaping. The full suite is 265 passed with 2 infrastructure skips and
-82.32% branch coverage. Live Stripe checkout, Selenium Grid, and MinIO/S3 compose
-paths remain **UNVERIFIED** (no Stripe test keys; Docker denied). See
+**Status: Phase 7 complete — proxy providers and rotation.**
+Phase 7 adds a pluggable upstream proxy layer behind the validating egress proxy:
+a static list provider and an authenticated rotating-gateway provider, per-job
+assignment with Redis-backed round-robin and health state, TCP health probes with
+cooldown, and bounded retries on a different proxy after a tagged proxy failure.
+Results record only `{id, provider, country}`; credentials stay in the
+environment and never reach logs, job payloads, results, or the database. No
+CAPTCHA solving, stealth, or fingerprint spoofing is implemented. The full suite
+is 295 passed with 1 infrastructure skip (Chrome/Grid). Live Stripe checkout,
+Selenium Grid, MinIO/S3, and real commercial proxy gateways remain
+**UNVERIFIED** (no credentials; Docker denied). See
 `docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Requirements
@@ -77,6 +80,43 @@ EGRESS_PROXY_LISTEN_HOST=127.0.0.1 EGRESS_PROXY_LISTEN_PORT=8888 \
   uv run python -m apps.worker.egress_proxy
 ```
 
+### Proxies
+
+Proxy support is off by default (`PROXY_ENABLED=false`); requests that set
+`proxy_country` then fail with `422`. Enable exactly one provider:
+
+```bash
+# Static list: [COUNTRY|]http(s)://[user:pass@]host:port
+PROXY_ENABLED=true
+PROXY_STATIC_LIST=DE|http://user:pass@proxy-a:8080,US|http://user:pass@proxy-b:8080
+
+# Or an authenticated rotating gateway. The optional {country} placeholder is
+# expanded per request; countryless requests use PROXY_GATEWAY_DEFAULT_COUNTRY.
+# PROXY_ENABLED=true
+# PROXY_GATEWAY_URL=http://user-{country}:pass@gateway.example:8080
+# PROXY_GATEWAY_COUNTRIES=DE,US
+# PROXY_GATEWAY_DEFAULT_COUNTRY=US
+```
+
+`proxy_country` is validated at acceptance against the configured provider, and
+`422` means the country is not served. Each attempt leases one endpoint with
+Redis-backed round-robin, skips endpoints in health cooldown, and retries up to
+`PROXY_MAX_RETRIES` times on a different endpoint when the egress proxy tags a
+failure as upstream (`X-ScrapeFlow-Proxy-Upstream: 1`). Health probes are plain
+TCP connects, cached for `PROXY_HEALTH_CACHE_SECONDS`; failures set
+`PROXY_HEALTH_COOLDOWN_SECONDS`. Automation retries only before a successful
+mutating step (`click`, `type`, `press`, `select`).
+
+Per-job upstreams are applied by a worker-local validating proxy rather than by
+handing the browser the upstream directly, so destination checks still run
+before any upstream connection (the upstream performs its own resolution for the
+final hop). With a remote Grid, that proxy must be reachable from the Grid
+container. Compose sets `EGRESS_JOB_PROXY_BIND_HOST=0.0.0.0` and
+`EGRESS_JOB_PROXY_ADVERTISE_HOST=worker` for the worker. Outside compose, set
+both; a loopback advertise host with `SELENIUM_REMOTE_URL` fails with `503`
+instead of bypassing validation. Providers never implement CAPTCHA solving,
+stealth, or fingerprint spoofing.
+
 ## Authentication
 
 - **Users:** `POST /v1/auth/signup`, `POST /v1/auth/login`, cookie-based refresh
@@ -136,8 +176,9 @@ EGRESS_PROXY_LISTEN_HOST=127.0.0.1 EGRESS_PROXY_LISTEN_PORT=8888 \
 `POST /v1/scrape` accepts CSS/XPath selectors, `render_js`, `wait_for`,
 screenshots, HTML capture, bounded pagination, and request headers. Reusing an
 `Idempotency-Key` returns `200` with `Idempotent-Replay: true` instead of
-creating a second job. `screenshot`/`wait_for` require `render_js=true`;
-`proxy_country` currently returns `422` because no proxy provider is configured.
+creating a second job. `screenshot`/`wait_for` require `render_js=true`.
+`proxy_country` is validated against the configured provider; see
+[Proxies](#proxies).
 
 ### Scrape example
 
@@ -248,9 +289,14 @@ and `X-Content-Type-Options: nosniff`, and every export is tenant-scoped.
   gaps. HTTP redirects are validated per hop; browser jobs revalidate the final
   URL. Compose exposes the proxy only on the internal network and allows
   `80,443`.
+- Per-job upstream proxies are chained behind that validating proxy, not handed
+  directly to Chrome. Credentials are held as `SecretStr`, excluded from
+  `repr`, redacted in logs, and replaced by a hashed endpoint id in results.
+  Destination validation still runs before any upstream connection.
 - The API process never imports Selenium. Browser jobs require
-  `SELENIUM_REMOTE_URL` plus `EGRESS_PROXY_URL`; otherwise the job fails with
-  `503` instead of bypassing validation.
+  `SELENIUM_REMOTE_URL` plus either `EGRESS_PROXY_URL` or a reachable
+  per-job-proxy advertise host; otherwise the job fails with `503` instead of
+  bypassing validation.
 - Artifact storage keys are server-generated, traversal-checked, and scoped to
   `org/job`. S3/MinIO downloads use short-lived presigned redirects; the local
   backend streams with `attachment`, `nosniff`, and a sandbox CSP.
