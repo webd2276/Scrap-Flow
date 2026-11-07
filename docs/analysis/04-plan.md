@@ -144,8 +144,9 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 - Depends: P3, P4. **Rollback:** `PROXY_ENABLED=false` static env fallback.
 
 ### Phase 8 — Dashboard (L)
+**Status (2026-11-07):** Implemented. Next.js App Router + TypeScript + Tailwind dashboard under `apps/web`: login/signup with ToS acceptance, API keys (secret shown once), scrape form with live JSON preview, typed automation builder covering every step action including nested `execute_if_present`/`loop_pages`, job list/detail with events, result, screenshot, and CSV/JSON export, schedules with run history/export, and usage/billing. A same-origin BFF stores the refresh token in an httpOnly cookie, keeps the access token in memory only, and proxies only `/v1` paths with an allowlisted header set. Web gates pass: `npm run lint`, `npm run typecheck`, 30 Vitest tests, `npm run build`, and Playwright Chromium E2E (5 passed, 2 skipped without `E2E_EMAIL`/`E2E_PASSWORD`) including a signup→key→scrape→automation→schedule→billing→re-login journey. Dev/prod compose add a `web` service and Caddy routes API paths vs. dashboard paths. Full compose startup remains **UNVERIFIED** unless noted in the gap matrix.
 **Goal:** usable Next.js dashboard for all customer flows.
-- Files: `apps/web/` pages: login/signup (+ToS), keys, scrape, automate builder, jobs list/detail, schedules, usage/billing; `lib/api.ts`; Tailwind components; middleware for JWT.
+- Files: `apps/web/` pages: login/signup (+ToS), keys, scrape, automate builder, jobs list/detail, schedules, usage/billing; `lib/api.ts`; Tailwind components; same-origin BFF for auth and proxying.
 - Tests: `npm run lint`, `tsc`, unit for formatters; Playwright E2E (login, create key, scrape local page, view job, build 3-step automation, schedule, export).
 - Acceptance: dashboard builds and drives the API; no heavy UI framework; accessible labels; no secrets in client storage beyond tokens.
 - Depends: P2, P3, P4, P5, P6. **Rollback:** static `apps/web` deploy rollback; API versioned.
@@ -169,11 +170,11 @@ Each item lists goal, files, tests, acceptance, dependencies, rollback. Effort e
 | Layer | How | This host |
 |---|---|---|
 | Unit | pytest, no services | Runnable (venv). |
-| Integration | Postgres 16 + Redis 7 via testcontainers | Docker denied. Fallback: user-space PostgreSQL 18 cluster + extracted Redis 8 binary; results labeled. CI uses pinned 16/7. |
-| Browser | Selenium Grid + local static site | Docker denied; fallback Chrome for Testing (156) + chromedriver locally; Grid compose UNVERIFIED here. |
-| Dashboard | Next.js build + Playwright | Node 24 available; browser download needed. |
+| Integration | Postgres 16 + Redis 7 via testcontainers | Docker available; current runs use pinned PostgreSQL 16 + Redis 7 containers on `127.0.0.1:55432/56379`. |
+| Browser | Selenium Grid + local static site | Chrome for Testing + chromedriver locally; Grid compose UNVERIFIED here. |
+| Dashboard | Next.js build + Playwright | Verified locally: lint, tsc, Vitest, build, Chromium E2E against a live API. |
 | Stripe | signed test events, no live keys | Live checkout UNVERIFIED. |
-| Compose/TLS | `docker compose up` | **Blocked** until Docker socket access is granted. Exact command provided. |
+| Compose/TLS | `docker compose up` | `docker compose config` renders dev and prod; full-stack startup not yet exercised. |
 | Load | Locust smoke | Partial; real numbers only if stack runs. |
 
 ## 6. Decisions to record in `docs/decisions.md` (defaults chosen)

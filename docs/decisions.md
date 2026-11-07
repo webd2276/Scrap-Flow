@@ -316,3 +316,18 @@ probe or request failure; `PROXY_ENABLED=false` remains the rollback path.
 Retries are capped by `PROXY_MAX_RETRIES` (default 2) and only fire for tagged
 proxy failures. Automation retries only when no mutating step (`click`, `type`,
 `press`, `select`) has succeeded, so a retry cannot repeat a side effect.
+
+## D-044 — The dashboard uses a same-origin BFF, not browser storage for refresh tokens
+Alternatives: keep both tokens in `localStorage`, or have the browser call the
+API cross-origin with credentials.
+Reason: a refresh token readable by JavaScript turns any XSS into long-lived
+account takeover, and cross-origin cookies make CORS, `SameSite`, and
+deployment domains part of the security perimeter. Instead, Next.js route
+handlers own the refresh token in an httpOnly, `SameSite=Lax` cookie (Secure in
+production), keep the access token in React memory only, and expose
+`/api/proxy/[...path]` which accepts only `/v1` path segments and forwards a
+small header allowlist. The browser never learns the API origin. On reload the
+BFF refreshes the session; on logout it clears the cookie and revokes the
+refresh token. Billing redirects must be HTTPS, and server-supplied download
+filenames are reduced to a safe basename. Dashboards use Tailwind and a small
+local component set instead of a heavy UI framework.

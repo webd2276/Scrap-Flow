@@ -4,23 +4,28 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 7 complete — proxy providers and rotation.**
-Phase 7 adds a pluggable upstream proxy layer behind the validating egress proxy:
-a static list provider and an authenticated rotating-gateway provider, per-job
-assignment with Redis-backed round-robin and health state, TCP health probes with
-cooldown, and bounded retries on a different proxy after a tagged proxy failure.
-Results record only `{id, provider, country}`; credentials stay in the
-environment and never reach logs, job payloads, results, or the database. No
-CAPTCHA solving, stealth, or fingerprint spoofing is implemented. The full suite
-is 295 passed with 1 infrastructure skip (Chrome/Grid). Live Stripe checkout,
-Selenium Grid, MinIO/S3, and real commercial proxy gateways remain
-**UNVERIFIED** (no credentials; Docker denied). See
-`docs/analysis/02-gap-matrix.md` for the live gap list.
+**Status: Phase 8 complete — Next.js dashboard.**
+Phase 8 adds `apps/web`, a Next.js App Router + TypeScript + Tailwind dashboard
+for login/signup with ToS acceptance, API keys (secret shown once), scrape and
+typed automation submission, job list/detail with events, screenshots and
+CSV/JSON export, schedules with run history and export, and usage/billing.
+A same-origin BFF keeps the refresh token in an httpOnly cookie and the access
+token only in memory; `/api/proxy/*` restricts traffic to `/v1` paths and an
+allowlist of headers. No heavy UI framework is used, and every control has an
+accessible label. Web checks pass: lint, typecheck, 30 Vitest unit tests,
+production build, and Playwright Chromium E2E (5 passed, 2 skipped when
+`E2E_EMAIL`/`E2E_PASSWORD` are unset), including a full
+signup→key→scrape→automation→schedule→billing→re-login journey. Dev and prod
+compose include a `web` service and Caddy splits `/v1`, health, metrics, docs,
+and OpenAPI to the API with the dashboard taking the rest. Live Stripe checkout,
+Selenium Grid, MinIO/S3, real commercial proxy gateways, and a full compose
+startup remain **UNVERIFIED** where noted in `docs/analysis/02-gap-matrix.md`.
 
 ## Requirements
 
 - Docker + Docker Compose (full stack), or
 - Python 3.12 + `uv`, PostgreSQL, and Redis for local development.
+- Node 22 + npm for the dashboard (`apps/web`).
 
 ## Quick start (Docker)
 
@@ -42,6 +47,9 @@ curl -s localhost:8000/ready
 ```
 
 API docs: <http://localhost:8000/docs> (disabled in production).
+Dashboard: <http://localhost:3000>. Set `API_BASE_URL=http://api:8000` for the
+container (compose already does); it is the server-only API origin and is never
+exposed to the browser.
 
 ## Local development
 
@@ -79,6 +87,38 @@ run the standalone proxy:
 EGRESS_PROXY_LISTEN_HOST=127.0.0.1 EGRESS_PROXY_LISTEN_PORT=8888 \
   uv run python -m apps.worker.egress_proxy
 ```
+
+### Dashboard
+
+The dashboard is a same-origin BFF: the browser talks only to Next.js, which
+holds the refresh token in an httpOnly `sf_refresh` cookie and the access token
+in React memory. `/api/proxy/[...path]` allows only `/v1/*` and forwards a small
+header allowlist; it never exposes the API origin or refresh token.
+
+```bash
+cd apps/web
+npm ci
+cp .env.example .env.local       # API_BASE_URL points at the running API
+npm run dev                      # http://127.0.0.1:3000
+```
+
+Quality gates:
+
+```bash
+cd apps/web
+npm run lint
+npm run typecheck
+npm test                         # Vitest unit tests
+npm run build
+npx playwright install chromium  # once
+npm run e2e                      # needs the API + PostgreSQL/Redis running
+```
+
+Playwright drives the public pages and a full journey: signup with ToS, create
+an API key, submit and inspect a scrape, export results, build a three-step
+automation, create a schedule and export history, open billing, then sign out
+and back in. Two additional UI specs run only when `E2E_EMAIL` and
+`E2E_PASSWORD` are provided.
 
 ### Proxies
 
@@ -342,7 +382,7 @@ uv run pytest -m browser
 ```
 apps/api        FastAPI app (middleware, routers, services)
 apps/worker     Celery workers and Selenium runner
-apps/web        Next.js dashboard (later phase)
+apps/web        Next.js App Router dashboard + same-origin BFF
 packages/core   settings, errors, logging, db, security, rate limiting
 migrations      Alembic
 tests           unit / integration / e2e
@@ -353,9 +393,15 @@ deploy          production compose, Caddy, dashboards
 
 - The production compose file must be rendered from the repository root:
   `docker compose --project-directory . -f deploy/compose.prod.yml --env-file .env config`
-- Only Caddy publishes ports; the API is reachable only on the internal network.
-  Uvicorn trusts `X-Forwarded-For` from that network so per-IP limits see the
-  real client address.
-- Docker daemon access is unavailable on the current development host, so
-  `docker compose up --build` and image builds remain **UNVERIFIED** here. CI
-  and the local Python/PostgreSQL/Redis/Selenium paths are used instead.
+- Only Caddy publishes ports; the API and dashboard are reachable only on the
+  internal network. Uvicorn trusts `X-Forwarded-For` from that network so
+  per-IP limits see the real client address. Caddy sends `/v1/*`, `/health`,
+  `/ready`, `/metrics`, `/docs`, and `/openapi.json` to the API; every other
+  path goes to the Next.js `web` service.
+- `apps/web/Dockerfile` builds the Next.js standalone server on Node 22 and runs
+  it as a non-root user with a read-only root filesystem and tmpfs. Both compose
+  files render with `docker compose config`; the image builds and serves
+  `/login` in a read-only container.
+- A full `docker compose up` was not exercised on this host, so end-to-end
+  compose/Grid startup remains **UNVERIFIED**. CI and the local
+  Python/PostgreSQL/Redis/Selenium/Next.js paths are used instead.

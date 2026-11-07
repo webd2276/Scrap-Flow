@@ -16,6 +16,10 @@ build/
 node_modules/
 .next/
 out/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
 
 # OS / editors
 .DS_Store

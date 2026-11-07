@@ -263,3 +263,26 @@ Phase 7 explicit gaps carried forward:
 - Docker/Selenium Grid compose paths remain UNVERIFIED; the worker-local proxy advertise path is unit-tested only.
 - Health probes are TCP-only and do not verify that a proxy can reach a specific target or that its credentials are accepted.
 - Proxy metrics are structured logs, not Prometheus series; the metrics phase remains P9.
+
+## Live delta after Phase 8 (2026-11-07)
+
+Phase 8 adds the Next.js dashboard in `apps/web`. Lint, typecheck, Vitest,
+production build, and a Playwright Chromium journey pass locally against a live
+API/PostgreSQL/Redis stack. The dashboard uses a same-origin BFF rather than
+holding refresh tokens in browser storage.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-003 | Done | REST API plus a working dashboard: `apps/web/app/(dashboard)/{jobs,scrape,automate,schedules,keys,billing}` and job detail. The browser calls only the same-origin BFF. |
+| REQ-011 | Done | Next.js App Router + TypeScript + Tailwind v4 in `apps/web` (`app/`, `components/`, `lib/`); production build emits 16 routes. |
+| REQ-040 | Done | Login/signup with required ToS, key create/revoke with one-time secret, scrape form with live request preview, typed automation builder for all actions, job list/detail with events, screenshots, result and CSV/JSON export, schedules with run history/export, usage/billing. Exercised by `e2e/dashboard.spec.ts`. |
+| REQ-041 | Done | Tailwind with a small local component set (`components/ui.tsx`); no UI framework. Controls use labels/roles; the only client-stored credential is the in-memory access token, with the refresh token in an httpOnly `sf_refresh` cookie. |
+| REQ-067 | Done | Python: 295 passed, 2 skipped, 82.80% coverage. Web: 30 Vitest tests in 3 files, lint, typecheck, and build. Playwright Chromium: 5 passed, 2 skipped (optional env-authenticated specs) including the full customer journey. |
+| REQ-071 | Partial | Dev/prod compose add a non-root, read-only `web` service; Caddy routes `/v1/*`, health, metrics, docs, and OpenAPI to the API and everything else to the dashboard. `docker compose config` renders for both files. The web image builds and serves `/login` (HTTP 200) in a read-only container; full-stack startup remains UNVERIFIED. |
+| REQ-075 | Done | New web unit suites `tests/{automation,format,download}.test.ts` cover automation payload shaping, formatters, redirect safety, and download-name sanitisation; the Playwright journey covers the integrated flows. |
+
+Phase 8 explicit gaps carried forward:
+- Playwright runs against Chromium only; Firefox/WebKit are not exercised.
+- The two env-authenticated UI specs are skipped unless `E2E_EMAIL`/`E2E_PASSWORD` are supplied; the self-contained journey covers the same routes.
+- Billing checkout/portal redirects reject non-HTTPS URLs, but live Stripe redirects remain UNVERIFIED (no Stripe test keys).
+- A full `docker compose up` (web + Caddy + API + worker + Grid) remains UNVERIFIED; compose rendering plus a successful web image build and read-only container smoke test are the local evidence.
