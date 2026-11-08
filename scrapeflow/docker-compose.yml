@@ -108,6 +108,10 @@ services:
     environment:
       EGRESS_JOB_PROXY_BIND_HOST: 0.0.0.0
       EGRESS_JOB_PROXY_ADVERTISE_HOST: worker
+      # Celery prefork children share counters through this directory.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+      WORKER_METRICS_ENABLED: "true"
+    expose: ["9101"]
     depends_on:
       postgres:
         condition: service_healthy

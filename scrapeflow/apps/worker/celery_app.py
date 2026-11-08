@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import structlog
 from celery import Celery
+from celery.signals import worker_ready
+from packages.core.logging import configure_logging
+from packages.core.observability import start_worker_metrics_server
 from packages.core.settings import get_settings
 
 settings = get_settings()
+configure_logging(settings)
+logger = structlog.get_logger(__name__)
 
 celery_app = Celery(
     "scrapeflow",
@@ -25,6 +33,7 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
+    worker_hijack_root_logger=False,
     task_track_started=True,
     broker_connection_retry_on_startup=True,
     result_backend=None,
@@ -66,3 +75,18 @@ celery_app.conf.update(
         "visibility_timeout": max(settings.job_lease_seconds * 2, 600),
     },
 )
+
+
+@worker_ready.connect  # type: ignore[untyped-decorator]
+def _start_metrics_server(**_: Any) -> None:
+    if not settings.worker_metrics_enabled:
+        return
+    started = start_worker_metrics_server(
+        settings.worker_metrics_host,
+        settings.worker_metrics_port,
+    )
+    if not started:
+        logger.warning(
+            "worker.metrics_unavailable",
+            reason="PROMETHEUS_MULTIPROC_DIR is required",
+        )

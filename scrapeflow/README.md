@@ -4,22 +4,22 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 8 complete — Next.js dashboard.**
-Phase 8 adds `apps/web`, a Next.js App Router + TypeScript + Tailwind dashboard
-for login/signup with ToS acceptance, API keys (secret shown once), scrape and
-typed automation submission, job list/detail with events, screenshots and
-CSV/JSON export, schedules with run history and export, and usage/billing.
-A same-origin BFF keeps the refresh token in an httpOnly cookie and the access
-token only in memory; `/api/proxy/*` restricts traffic to `/v1` paths and an
-allowlist of headers. No heavy UI framework is used, and every control has an
-accessible label. Web checks pass: lint, typecheck, 30 Vitest unit tests,
-production build, and Playwright Chromium E2E (5 passed, 2 skipped when
-`E2E_EMAIL`/`E2E_PASSWORD` are unset), including a full
-signup→key→scrape→automation→schedule→billing→re-login journey. Dev and prod
-compose include a `web` service and Caddy splits `/v1`, health, metrics, docs,
-and OpenAPI to the API with the dashboard taking the rest. Live Stripe checkout,
-Selenium Grid, MinIO/S3, real commercial proxy gateways, and a full compose
-startup remain **UNVERIFIED** where noted in `docs/analysis/02-gap-matrix.md`.
+**Status: Phase 9 complete — observability, load profile, security review, and docs.**
+Phase 9 adds Prometheus metrics for API traffic, job duration/failures, queue
+depth, active browser sessions, webhook delivery/backlog, quota rejections,
+rate-limit hits, and DB/Redis latency; the API serves `/metrics` (optional
+bearer token) and workers aggregate prefork counters through
+`PROMETHEUS_MULTIPROC_DIR`. JSON logs carry `request_id` on every request and
+`job_id` for the full worker execution, Sentry stays PII-free, and
+`deploy/prometheus/` + `deploy/grafana/` provide scrape config, alert rules,
+and a provisioned dashboard. A Locust profile lives in `tests/load/`.
+`docs/runbook.md`, `docs/security-checklist.md`, and `docs/FINAL_REPORT.md`
+cover operations and the release evidence. The Python suite is 313 passed with
+3 skips (Chrome/Grid and Locust not installed locally) at 83.02% coverage; web
+lint, typecheck, Vitest, build, and Chromium E2E pass. Live Stripe checkout,
+Selenium Grid, MinIO/S3, live Celery Beat, real commercial proxy gateways, and
+a real external webhook receiver remain **UNVERIFIED** (no credentials/stack).
+See `docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Requirements
 
@@ -388,6 +388,27 @@ migrations      Alembic
 tests           unit / integration / e2e
 deploy          production compose, Caddy, dashboards
 ```
+
+### Observability and load testing
+
+```bash
+# API metrics (optional bearer token; 404 when METRICS_ENABLED=false)
+curl -fsS http://localhost:8000/metrics | head
+
+# Run a staging load profile (never against production)
+LOAD_API_KEY=sf_live_... LOAD_TARGET_URL=https://example.com \
+  uv run --group e2e locust -f tests/load/locustfile.py --host https://staging.example.com \
+  --users 25 --spawn-rate 5 --run-time 5m --headless
+```
+
+Workers expose aggregated prefork metrics on `WORKER_METRICS_PORT` (default
+9101) when `WORKER_METRICS_ENABLED=true` and `PROMETHEUS_MULTIPROC_DIR` is set;
+compose already sets both. Scrape configs and alert rules are in
+`deploy/prometheus/`, the provisioned dashboard is in `deploy/grafana/`, and
+the optional `deploy/compose.observability.yml` overlay runs Prometheus and
+Grafana on loopback (set `GRAFANA_ADMIN_PASSWORD`). JSON logs include
+`request_id` and, in workers, `job_id`; see `docs/runbook.md` for incident
+queries. Client examples are in `docs/examples/`.
 
 ## Production notes
 

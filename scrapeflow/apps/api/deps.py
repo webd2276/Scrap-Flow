@@ -14,6 +14,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from packages.core.db import get_db
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import ApiKey, Membership, Organization, User
+from packages.core.observability import record_rate_limit_hit
 from packages.core.rate_limit import RateLimiter
 from packages.core.redis import get_redis
 from packages.core.scopes import Scope, scopes_for_role
@@ -205,6 +206,7 @@ async def org_rate_limit(
 
     response.headers.update(result.headers())
     if not result.allowed:
+        record_rate_limit_hit(scope="org")
         raise AppError(
             429,
             ErrorCode.RATE_LIMITED,
@@ -231,6 +233,7 @@ async def ip_rate_limit(
 
     response.headers.update(result.headers())
     if not result.allowed:
+        record_rate_limit_hit(scope="ip")
         raise AppError(429, ErrorCode.RATE_LIMITED, "Rate limit exceeded", headers=result.headers())
 
 
@@ -252,6 +255,7 @@ async def auth_ip_rate_limit(
 
     response.headers.update(result.headers())
     if not result.allowed:
+        record_rate_limit_hit(scope="auth")
         raise AppError(
             429,
             ErrorCode.RATE_LIMITED,

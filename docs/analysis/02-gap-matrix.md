@@ -286,3 +286,25 @@ Phase 8 explicit gaps carried forward:
 - The two env-authenticated UI specs are skipped unless `E2E_EMAIL`/`E2E_PASSWORD` are supplied; the self-contained journey covers the same routes.
 - Billing checkout/portal redirects reject non-HTTPS URLs, but live Stripe redirects remain UNVERIFIED (no Stripe test keys).
 - A full `docker compose up` (web + Caddy + API + worker + Grid) remains UNVERIFIED; compose rendering plus a successful web image build and read-only container smoke test are the local evidence.
+
+## Live delta after Phase 9 (2026-11-07)
+
+Phase 9 adds metrics, correlation IDs, alerting assets, a load profile, and the
+operations/security documentation. The metrics endpoint was exercised with real
+PostgreSQL and Redis in the integration suite; Prometheus/Grafana were rendered
+and config-validated but not started, and a full Locust run was not executed
+because Locust is not installed on this host.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-013 | Done | `/metrics` serves the required Prometheus series `apps/api/routers/metrics.py`, `packages/core/observability.py`; HTTP counters/histograms are recorded with route templates and `/metrics` is excluded from its own counters. Queue depth, browser sessions, webhook backlog, and DB/Redis latency are sampled at scrape time with a timeout. Workers aggregate prefork counters through `PROMETHEUS_MULTIPROC_DIR` (`apps/worker/celery_app.py`). JSON logs, `/health`, `/ready`, and PII-free Sentry init are covered by tests. Optional `METRICS_TOKEN` and `METRICS_ENABLED` controls are tested. |
+| REQ-062 | Done | `RequestContextMiddleware` accepts a safe `X-Request-ID` or generates one, echoes it on the response, binds it to structlog context, and writes it on every access line. Workers bind `job_id` for execution and post-terminal hooks. Unit tests assert JSON log fields, the echoed header, invalid-id replacement, and worker binding. |
+| REQ-063 | Done | Standard-library Python and Node clients under `docs/examples/` submit with an idempotency key, poll to a terminal state, print results, and surface typed error envelopes. `docs/examples/README.md` documents credentials and browser-rendering limits. |
+| REQ-067 | Done | Python: 313 passed, 3 skipped, 83.02% coverage; the skips are Chrome/Grid and a Locust import check. New tests cover `/metrics` content, token/disabled behavior, HTTP counters, real PG/Redis sampling, quota rejection metrics, JSON log fields, worker `job_id` binding, Sentry init, and the load-script shape. Web: 30 Vitest tests, lint, typecheck, and build; Playwright Chromium 5 passed, 2 skipped. |
+| REQ-077 | Partial | CI gains a Node 22 dashboard job (npm ci, lint, typecheck, Vitest, build) and builds both the backend and web images; the backend image path now points at `scrapeflow/`. The workflow was not executed on GitHub Actions from this host, so CI green is **UNVERIFIED** until the next push/PR run. |
+
+Phase 9 explicit gaps carried forward:
+- Prometheus and Grafana configuration and the optional compose overlay render, but the stack was not started on this host; alert delivery is untested.
+- The Locust profile parses and its non-import smoke test passes, but a real load run produced no capacity numbers here.
+- The CI workflow is configuration-validated only; hosted-runner execution remains UNVERIFIED.
+- Live Stripe, Selenium Grid, MinIO/S3, live Celery Beat, real proxy gateways, and a real external webhook receiver remain UNVERIFIED.

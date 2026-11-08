@@ -1,0 +1,95 @@
+groups:
+  - name: scrapeflow-availability
+    rules:
+      - alert: ScrapeFlowApiDown
+        expr: up{job="scrapeflow-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: ScrapeFlow API metrics target is down
+          description: Prometheus has not scraped the API for 2 minutes.
+
+      - alert: ScrapeFlowWorkerDown
+        expr: up{job="scrapeflow-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: ScrapeFlow worker metrics target is down
+          description: The worker metrics endpoint on port 9101 is unreachable.
+
+  - name: scrapeflow-api
+    rules:
+      - alert: ScrapeFlowHighErrorRate
+        expr: |
+          sum(rate(scrapeflow_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(scrapeflow_http_requests_total[5m])), 1e-9) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of API requests are failing
+          description: "Five-minute 5xx ratio is {{ $value | humanizePercentage }}."
+
+      - alert: ScrapeFlowSlowRequests
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(scrapeflow_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: API p95 latency is above two seconds
+          description: "p95 is {{ $value | humanizeDuration }}."
+
+      - alert: ScrapeFlowDatabaseLatency
+        expr: max(scrapeflow_db_latency_seconds) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Readiness database query is slow
+          description: "The scrape-time DB probe takes {{ $value | humanizeDuration }}."
+
+      - alert: ScrapeFlowRedisLatency
+        expr: max(scrapeflow_redis_latency_seconds) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis PING latency is high
+          description: "Redis PING takes {{ $value | humanizeDuration }}."
+
+  - name: scrapeflow-jobs
+    rules:
+      - alert: ScrapeFlowQueueBacklog
+        expr: max(scrapeflow_queue_depth) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Celery queue backlog is over 100 messages
+          description: "Queue {{ $labels.queue }} has {{ $value }} waiting messages."
+
+      - alert: ScrapeFlowHighJobFailureRate
+        expr: |
+          sum(rate(scrapeflow_jobs_total{status="failed"}[15m]))
+            / clamp_min(sum(rate(scrapeflow_jobs_total[15m])), 1e-9) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 20% of terminal jobs are failing
+          description: "Failure ratio is {{ $value | humanizePercentage }}."
+
+      - alert: ScrapeFlowWebhookBacklog
+        expr: max(scrapeflow_webhook_pending) > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook deliveries are backing up
+          description: "{{ $value }} deliveries are pending."

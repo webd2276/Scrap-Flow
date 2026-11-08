@@ -62,8 +62,31 @@ jobs:
       - run: uv sync --frozen --dev
       - run: uv run pytest tests/integration -q
 
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: scrapeflow/apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: scrapeflow/apps/web/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+
   image:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t scrapeflow:ci .
+      - run: docker build -t scrapeflow:ci scrapeflow
+      - run: docker build -t scrapeflow-web:ci scrapeflow/apps/web

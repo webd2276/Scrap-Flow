@@ -21,6 +21,7 @@ from packages.core.models import (
     WebhookDeliveryStatus,
     WebhookEndpoint,
 )
+from packages.core.observability import record_webhook_delivery
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy, validate_url
 from packages.core.webhooks import build_headers, canonical_body, reveal_secret
@@ -261,6 +262,13 @@ async def _record_result(
             else:
                 endpoint.last_failure_at = now
         await session.commit()
+        if success:
+            outcome = "succeeded"
+        elif delivery.status == WebhookDeliveryStatus.PENDING:
+            outcome = "retrying"
+        else:
+            outcome = "dead"
+        record_webhook_delivery(event=delivery.event_type, result=outcome)
 
 
 async def _send(

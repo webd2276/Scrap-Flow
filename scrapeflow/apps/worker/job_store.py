@@ -8,12 +8,16 @@ from datetime import UTC, datetime, timedelta
 
 from packages.core.db import create_engine, create_sessionmaker
 from packages.core.models import Artifact, Job, JobEvent, JobStatus
+from packages.core.observability import record_job_completion
 from packages.core.settings import Settings
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_TERMINAL_STATUSES = frozenset(
+    {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.TIMED_OUT}
+)
 
 
 def sessionmaker(settings: Settings) -> async_sessionmaker[AsyncSession]:
@@ -135,6 +139,7 @@ async def finish_job(
     job = await session.get(Job, job_id)
     if job is None:
         return None
+    previous_status = job.status
     now = datetime.now(UTC)
     job.status = status
     job.result = result
@@ -155,6 +160,13 @@ async def finish_job(
     )
     await session.commit()
     await session.refresh(job)
+    if previous_status not in _TERMINAL_STATUSES:
+        record_job_completion(
+            kind=job.kind.value,
+            status=job.status.value,
+            duration_seconds=(job.duration_ms / 1000.0 if job.duration_ms is not None else None),
+            error_code=job.error_code,
+        )
     return job
 
 

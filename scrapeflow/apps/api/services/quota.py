@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 from packages.core.errors import AppError, ErrorCode
 from packages.core.models import UsageLedger, UsageLedgerStatus
+from packages.core.observability import record_quota_rejection
 from packages.core.plans import Plan
 from packages.core.quota import (
     PERIOD_TTL_GRACE_SECONDS,
@@ -111,6 +112,7 @@ async def reserve_job(
     )
     reset = seconds_until_reset()
     if not lease.acquired:
+        record_quota_rejection(reason="concurrency")
         headers = {
             "X-Concurrency-Limit": str(lease.limit),
             "X-Concurrency-Remaining": "0",
@@ -133,6 +135,7 @@ async def reserve_job(
     )
     if not reservation.allowed:
         await store.release_slot(org_id, job_id=job_id)
+        record_quota_rejection(reason="quota")
         headers = _quota_headers(plan, reservation.used, reset)
         headers["Retry-After"] = str(reset)
         raise AppError(

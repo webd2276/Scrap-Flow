@@ -135,6 +135,13 @@ class Settings(BaseSettings):
 
     sentry_dsn: str | None = None
     metrics_enabled: bool = True
+    metrics_token: SecretStr | None = Field(default=None, min_length=32)
+    metrics_queues: str = "jobs,celery"
+    # Worker metrics use prometheus_client multiprocess mode. Set
+    # PROMETHEUS_MULTIPROC_DIR for the worker container and scrape this port.
+    worker_metrics_enabled: bool = False
+    worker_metrics_host: str = "0.0.0.0"  # noqa: S104 - scrape target inside the private network
+    worker_metrics_port: int = Field(default=9101, ge=1, le=65535)
 
     billing_enabled: bool = False
     stripe_secret_key: SecretStr | None = None
@@ -167,6 +174,7 @@ class Settings(BaseSettings):
         "proxy_static_list",
         "proxy_gateway_url",
         "proxy_gateway_default_country",
+        "metrics_token",
         mode="before",
     )
     @classmethod
@@ -210,6 +218,17 @@ class Settings(BaseSettings):
             if not re.fullmatch(r"[A-Z]{2}", country):
                 raise ValueError("PROXY_GATEWAY_COUNTRIES must be comma-separated ISO codes")
         return ",".join(countries)
+
+    @field_validator("metrics_queues")
+    @classmethod
+    def _validate_metrics_queues(cls, value: str) -> str:
+        queues = [part.strip() for part in value.split(",") if part.strip()]
+        if not queues:
+            raise ValueError("METRICS_QUEUES must list at least one queue")
+        for queue in queues:
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", queue):
+                raise ValueError(f"Invalid metrics queue name: {queue}")
+        return ",".join(queues)
 
     @field_validator("proxy_gateway_default_country")
     @classmethod
@@ -327,6 +346,10 @@ class Settings(BaseSettings):
     @property
     def proxy_gateway_country_list(self) -> tuple[str, ...]:
         return tuple(country for country in self.proxy_gateway_countries.split(",") if country)
+
+    @property
+    def metrics_queue_list(self) -> tuple[str, ...]:
+        return tuple(queue for queue in self.metrics_queues.split(",") if queue)
 
     @property
     def jwt_previous_key_map(self) -> dict[str, str]:

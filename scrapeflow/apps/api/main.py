@@ -30,6 +30,7 @@ from apps.api.routers import (
     health,
     jobs,
     keys,
+    metrics,
     schedules,
     scrape,
     webhooks,
@@ -92,6 +93,7 @@ def create_app(
     app.add_middleware(
         RequestContextMiddleware,
         header_name=resolved.request_id_header,
+        metrics_enabled=resolved.metrics_enabled,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -121,6 +123,7 @@ def create_app(
 
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(metrics.router)
     app.include_router(auth.router)
     app.include_router(keys.router)
     app.include_router(scrape.router)

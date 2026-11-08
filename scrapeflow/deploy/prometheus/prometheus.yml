@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: scrapeflow-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+    # If METRICS_TOKEN is set, mount the token and point Prometheus at the file:
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /etc/prometheus/metrics-token
+
+  - job_name: scrapeflow-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["worker:9101"]

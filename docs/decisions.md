@@ -331,3 +331,18 @@ BFF refreshes the session; on logout it clears the cookie and revokes the
 refresh token. Billing redirects must be HTTPS, and server-supplied download
 filenames are reduced to a safe basename. Dashboards use Tailwind and a small
 local component set instead of a heavy UI framework.
+
+## D-045 — Metrics use the default registry in the API and multiprocess shards in workers
+Alternatives: run a separate metrics process, push metrics to a gateway, or
+expose only per-process worker counters.
+Reason: the API is asynchronous and single-process per container, so the
+default Prometheus registry is accurate and needs no extra service. Celery runs
+prefork children, so per-process counters would be split and misleading; the
+worker sets `PROMETHEUS_MULTIPROC_DIR` and serves a `MultiProcessCollector`
+registry on port 9101. The directory is cleared before the pool forks to remove
+stale shards. `/metrics` supports an optional bearer token and returns 404 when
+disabled, so operators can hide it when Caddy exposes it. HTTP labels use the
+router template rather than raw paths to bound cardinality, and `/metrics` is
+excluded from its own counters. Scrape-time queue/session/DB/Redis gauges are
+best-effort: a slow dependency logs `metrics.runtime_sample_failed` without
+failing the scrape.

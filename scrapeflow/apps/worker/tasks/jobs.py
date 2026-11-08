@@ -303,6 +303,8 @@ async def _run_job(
     """Execute one job, then run post-terminal hooks without masking the result."""
     settings = settings or get_settings()
     maker = job_store.sessionmaker(settings)
+    # Every application log emitted while this job runs carries its id.
+    structlog.contextvars.bind_contextvars(job_id=str(job_id))
     try:
         return await _execute_job(
             job_id,
@@ -311,7 +313,10 @@ async def _run_job(
             policy=policy,
         )
     finally:
-        await process_terminal_job(maker, job_id=job_id, settings=settings)
+        try:
+            await process_terminal_job(maker, job_id=job_id, settings=settings)
+        finally:
+            structlog.contextvars.clear_contextvars()
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]

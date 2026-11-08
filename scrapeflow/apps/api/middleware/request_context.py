@@ -8,12 +8,14 @@ import uuid
 from contextvars import ContextVar
 
 import structlog
+from packages.core.observability import observe_http_request
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
 _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_METRICS_PATH = "/metrics"
 
 
 def current_request_id() -> str:
@@ -21,9 +23,16 @@ def current_request_id() -> str:
 
 
 class RequestContextMiddleware:
-    def __init__(self, app: ASGIApp, header_name: str = "X-Request-ID") -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        header_name: str = "X-Request-ID",
+        *,
+        metrics_enabled: bool = True,
+    ) -> None:
         self.app = app
         self.header_name = header_name
+        self.metrics_enabled = metrics_enabled
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -51,7 +60,8 @@ class RequestContextMiddleware:
         try:
             await self.app(scope, receive, send_with_id)
         finally:
-            duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            duration_seconds = time.perf_counter() - started
+            duration_ms = round(duration_seconds * 1000, 2)
             client = scope.get("client")
             structlog.get_logger("scrapeflow.access").info(
                 "request",
@@ -61,5 +71,21 @@ class RequestContextMiddleware:
                 duration_ms=duration_ms,
                 client_ip=client[0] if client else None,
             )
+            if self.metrics_enabled and path != _METRICS_PATH:
+                observe_http_request(
+                    method=method,
+                    route=_route_label(scope),
+                    status=status_code,
+                    duration_seconds=duration_seconds,
+                )
             structlog.contextvars.clear_contextvars()
             request_id_var.reset(token)
+
+
+def _route_label(scope: Scope) -> str:
+    """Use the router template, never the raw path, to bound label cardinality."""
+    route = scope.get("route")
+    template = getattr(route, "path", None)
+    if isinstance(template, str) and template:
+        return template
+    return "unmatched"
