@@ -1,0 +1,12 @@
+# Keep shell entry points LF so shebangs work in WSL, Git Bash, Linux, and macOS.
+*.sh text eol=lf
+*.command text eol=lf
+
+# Windows launchers use CRLF for Notepad and cmd.exe friendliness.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Compose/YAML consumed by Docker must stay LF.
+*.yml text eol=lf
+*.yaml text eol=lf

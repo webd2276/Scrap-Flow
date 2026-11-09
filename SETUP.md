@@ -33,14 +33,17 @@ Next.js dashboard (apps/web) ── same-origin BFF ──► FastAPI
 
 ### Required for the Docker setup
 
-| Tool | Version | Check |
-|---|---|---|
-| Docker Engine | 24+ | `docker version` |
-| Docker Compose | v2 | `docker compose version` |
-| Git | any recent | `git --version` |
-| curl + jq | any recent | `curl --version && jq --version` |
-| Disk space | ~10 GB free | `df -h` |
-| RAM | 8 GB recommended | `free -h` |
+| Tool | Linux | macOS | Windows |
+|---|---|---|---|
+| Docker Engine 24+ | required | Docker Desktop | Docker Desktop |
+| Docker Compose v2 | required | included | included |
+| Git | required | required | required |
+| Bash 3.2+ | required by `run.sh` | built in | not needed for `run.ps1` |
+| PowerShell 5.1+ | optional | optional | required for `run.ps1` |
+| curl | required by `run.sh` | required by `run.sh` | not needed by `run.ps1` |
+| jq | optional (API examples) | optional | optional |
+| Disk space | ~10 GB free | ~10 GB free | ~10 GB free |
+| RAM | 8 GB recommended | 8 GB recommended | 8 GB recommended |
 
 ### Required only for local development or tests
 
@@ -51,7 +54,17 @@ Next.js dashboard (apps/web) ── same-origin BFF ──► FastAPI
 | Node.js | 22+ | `node --version` |
 | npm | 10+ | `npm --version` |
 
-Windows users should run the commands in WSL 2 or Git Bash.
+Platform notes:
+
+- **Windows native:** use `scripts\run.ps1` or `scripts\run.cmd`. It needs
+  Docker Desktop and PowerShell only; it generates `.env` itself and does not
+  require Bash, Python, or curl.
+- **Windows WSL 2 / Git Bash:** use `./scripts/run.sh`. WSL needs Docker
+  integration enabled in Docker Desktop.
+- **macOS:** use `./scripts/run-macos.sh`, which delegates to the shared
+  `run.sh`. `python3` is only needed to create `.env` or run
+  `fix-db-password`; install it with `xcode-select --install` or
+  `brew install python`.
 
 ---
 
@@ -62,7 +75,8 @@ git clone <YOUR_REPOSITORY_URL> web-scrapping-tool
 cd web-scrapping-tool/scrapeflow
 ```
 
-If you already have the repository on disk, just `cd` into `scrapeflow/`.
+If you already have the repository on disk, just `cd` into `scrapeflow/`
+(Windows: `cd web-scrapping-tool\scrapeflow`).
 
 All remaining commands assume you are inside the `scrapeflow/` directory:
 
@@ -74,48 +88,87 @@ pwd   # .../web-scrapping-tool/scrapeflow
 
 ## 3. Fastest start — one command
 
-The included runner builds the images, creates `.env` with random secrets if it
-is missing, starts every service, and waits until the API and dashboard answer.
+The included runners build the images, create `.env` with random secrets if it
+is missing, start every service, and wait until the API and dashboard answer.
+All three platforms share the same Compose files and the same commands.
 
-```bash
-./scripts/run.sh
-```
+| Platform | Start command |
+|---|---|
+| Linux | `./scripts/run.sh` |
+| macOS | `./scripts/run-macos.sh` |
+| Windows PowerShell | `powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1` |
+| Windows CMD | `scripts\run.cmd` |
 
-What it does:
+What they do:
 
-1. Checks Docker, Compose v2, and curl.
-2. Creates `.env` with random secrets when missing.
-3. Tries the pinned MinIO image. If it cannot be pulled, it falls back to the
+1. Check Docker and Compose v2 (and curl on Linux/macOS).
+2. Create `.env` with random secrets when missing.
+3. Try the pinned MinIO image. If it cannot be pulled, fall back to the
    `adobe/s3mock` container so the stack still works locally.
-4. Builds and starts `postgres`, `redis`, `minio`, `migrate`, `minio-init`,
+4. Build and start `postgres`, `redis`, `minio`, `migrate`, `minio-init`,
    `api`, `worker`, `beat`, `egress-proxy`, `selenium`, and `web`.
-5. Waits for `http://127.0.0.1:8000/ready`.
-6. Prints the URLs.
+5. Wait for `http://127.0.0.1:8000/ready`.
+6. Print the URLs.
 
 Runner commands:
 
-```bash
-./scripts/run.sh                   # start / update the stack
-./scripts/run.sh status            # container status
-./scripts/run.sh logs              # follow API/worker/beat/web logs
-./scripts/run.sh seed              # create demo org + user + API key
-./scripts/run.sh fix-db-password   # repair a stale Postgres password
-./scripts/run.sh stop              # stop containers, keep data
-./scripts/run.sh reset             # stop containers and delete data volumes
+| Action | Linux / macOS | Windows PowerShell |
+|---|---|---|
+| Start or update | `./scripts/run.sh` | `.\scripts\run.ps1` |
+| Container status | `./scripts/run.sh status` | `.\scripts\run.ps1 status` |
+| Follow logs | `./scripts/run.sh logs` | `.\scripts\run.ps1 logs` |
+| Seed demo data | `./scripts/run.sh seed` | `.\scripts\run.ps1 seed` |
+| Repair DB password | `./scripts/run.sh fix-db-password` | `.\scripts\run.ps1 fix-db-password` |
+| Stop (keep data) | `./scripts/run.sh stop` | `.\scripts\run.ps1 stop` |
+| Stop and delete data | `./scripts/run.sh reset` | `.\scripts\run.ps1 reset` |
+
+If PowerShell's execution policy blocks the script, use the launcher or pass
+`-ExecutionPolicy Bypass`:
+
+```powershell
+scripts\run.cmd
+# or
+powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1
 ```
 
 Force a storage mode if the automatic choice is not what you want:
 
 ```bash
+# Linux / macOS
 SF_S3_MODE=s3mock ./scripts/run.sh   # always use the S3 mock
 SF_S3_MODE=minio  ./scripts/run.sh   # require real MinIO
+```
+
+```powershell
+# Windows PowerShell
+$env:SF_S3_MODE = 's3mock'; .\scripts\run.ps1
+$env:SF_S3_MODE = 'minio';  .\scripts\run.ps1
+```
+
+```bat
+rem Windows CMD
+set SF_S3_MODE=s3mock
+scripts\run.cmd
 ```
 
 Give the stack more time on a slow machine:
 
 ```bash
+# Linux / macOS
 SF_HEALTH_TIMEOUT=420 ./scripts/run.sh
 ```
+
+```powershell
+# Windows PowerShell
+$env:SF_HEALTH_TIMEOUT = '420'; .\scripts\run.ps1
+```
+
+> **Verification scope:** the Linux runner and the macOS wrapper were exercised
+> on Linux. `run.ps1` was syntax-checked and exercised with PowerShell 7.4.6
+> against the live stack on Linux. Native Windows PowerShell 5.1 + Docker
+> Desktop and native macOS runs were not available in this environment; if your
+> first run differs, the troubleshooting section lists the platform-specific
+> checks.
 
 Open:
 
@@ -140,13 +193,27 @@ Use this if you do not want the runner script.
 python3 scripts/generate_env.py
 ```
 
-This writes `scrapeflow/.env` with mode `600` and random values for the required
-secrets. It refuses to overwrite an existing file. Never commit `.env`.
+On Windows, the native runner creates `.env` without Python, or use:
+
+```powershell
+py -3 scripts\generate_env.py
+```
+
+This writes `scrapeflow/.env` with mode `600` (or a restricted NTFS ACL on
+Windows) and random values for the required secrets. It refuses to overwrite an
+existing file. Never commit `.env`.
 
 Review it before starting:
 
 ```bash
 grep -E '^(APP_ENV|POSTGRES_|DATABASE_URL|REDIS_URL|API_KEY_PEPPER|JWT_SECRET|WEBHOOK_SECRET_KEY|ARTIFACTS_|SELENIUM_REMOTE_URL|EGRESS_PROXY_URL)' .env | sed -E 's/(SECRET|PEPPER|PASSWORD)=.*/\1=<redacted>/'
+```
+
+```powershell
+# Windows PowerShell equivalent
+Get-Content .env |
+  Where-Object { $_ -match '^(APP_ENV|POSTGRES_|DATABASE_URL|REDIS_URL|API_KEY_PEPPER|JWT_SECRET|WEBHOOK_SECRET_KEY|ARTIFACTS_|SELENIUM_REMOTE_URL|EGRESS_PROXY_URL)' } |
+  ForEach-Object { $_ -replace '(SECRET|PEPPER|PASSWORD)=.*', '$1=<redacted>' }
 ```
 
 ### 4.2 Start the development stack
@@ -155,8 +222,9 @@ grep -E '^(APP_ENV|POSTGRES_|DATABASE_URL|REDIS_URL|API_KEY_PEPPER|JWT_SECRET|WE
 docker compose --project-directory . --env-file .env up -d --build
 ```
 
-If the pinned MinIO image cannot be pulled, use the runner (`./scripts/run.sh`)
-or add the S3-mock override manually:
+If the pinned MinIO image cannot be pulled, use the platform runner
+(`./scripts/run.sh`, `./scripts/run-macos.sh`, or `.\scripts\run.ps1`) or add
+the S3-mock override manually. The override example below is for a POSIX shell:
 
 ```bash
 cat > /tmp/sf-compose-override.yml <<'YAML'
@@ -210,6 +278,15 @@ curl -fsS http://127.0.0.1:8000/health
 curl -fsS http://127.0.0.1:8000/ready
 curl -s -o /dev/null -w 'dashboard=%{http_code}\n' http://127.0.0.1:3000/login
 curl -fsS http://127.0.0.1:8000/metrics | head
+```
+
+On Windows use `curl.exe` so PowerShell does not substitute its
+`Invoke-WebRequest` alias:
+
+```powershell
+curl.exe -fsS http://127.0.0.1:8000/health
+curl.exe -fsS http://127.0.0.1:8000/ready
+curl.exe -s -o NUL -w "dashboard=%{http_code}`n" http://127.0.0.1:3000/login
 ```
 
 Expected:
@@ -462,6 +539,11 @@ a private network, set a random `METRICS_TOKEN`; requests must then send
 
 ## 8. Local development without Docker
 
+The commands in this section assume a POSIX shell. On Windows, use WSL 2 or Git
+Bash, or translate the environment prefixes to PowerShell
+(`$env:DATABASE_URL = '...'`). The Docker path above works natively in
+PowerShell.
+
 You still need PostgreSQL and Redis. The quickest way is two containers:
 
 ```bash
@@ -562,6 +644,14 @@ TEST_REDIS_URL='redis://127.0.0.1:56379/0' \
 uv run pytest -q
 ```
 
+```powershell
+# Windows PowerShell equivalent
+$env:TEST_DATABASE_URL = 'postgresql+asyncpg://scrapeflow:scrapeflow@127.0.0.1:55432/scrapeflow_test'
+$env:TEST_REDIS_URL = 'redis://127.0.0.1:56379/0'
+uv run pytest -q
+Remove-Item Env:TEST_DATABASE_URL, Env:TEST_REDIS_URL
+```
+
 ### Web
 
 ```bash
@@ -587,7 +677,8 @@ worker test needs a Grid, and one load-script check needs `locust`.
 ## 10. Production deployment
 
 This section uses `deploy/compose.prod.yml`, which runs everything behind Caddy
-with automatic TLS.
+with automatic TLS. Run these commands on the Linux server (over SSH from
+Windows or macOS); the production topology is not a desktop deployment.
 
 ### 10.1 Server prerequisites
 
@@ -686,16 +777,22 @@ Then complete the signup → scrape → artifact flow from section 6 over HTTPS.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `service "migrate" didn't complete successfully` | Migration failed; read its logs | `docker compose logs migrate` |
-| `password authentication failed for user "scrapeflow"` | The Postgres volume was initialized with an older password than the current `.env` | `./scripts/run.sh fix-db-password` (keeps data) or `./scripts/run.sh reset` (deletes data) |
-| MinIO image pull fails with `401 UNAUTHORIZED` | The pinned tag is not available from your registry | `SF_S3_MODE=s3mock ./scripts/run.sh` locally, or mirror an image and set `MINIO_IMAGE` |
-| `port is already allocated` on 8000/3000 | Another stack or service is using the port | `./scripts/run.sh stop`, then retry; find it with `ss -ltnp \| grep -E ':8000\|:3000'` |
+| `password authentication failed for user "scrapeflow"` | The Postgres volume was initialized with an older password than the current `.env` | `./scripts/run.sh fix-db-password` / `.\scripts\run.ps1 fix-db-password` (keeps data), or `reset` (deletes data) |
+| MinIO image pull fails with `401 UNAUTHORIZED` | The pinned tag is not available from your registry | `SF_S3_MODE=s3mock ./scripts/run.sh`, `$env:SF_S3_MODE='s3mock'; .\scripts\run.ps1`, or mirror an image and set `MINIO_IMAGE` |
+| `port is already allocated` on 8000/3000 | Another stack or service is using the port | Stop the stack (`./scripts/run.sh stop` or `.\scripts\run.ps1 stop`), then retry. Linux: `ss -ltnp \| grep -E ':8000\|:3000'`; Windows: `netstat -ano \| findstr :8000` |
+| PowerShell: `running scripts is disabled on this system` | Execution policy blocks `.ps1` files | Run `scripts\run.cmd` or `powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1` |
+| PowerShell: `SF_S3_MODE is not recognized` | Bash-style environment assignment used in PowerShell | Use `$env:SF_S3_MODE = 's3mock'` before the command |
+| PowerShell: `curl` output looks like HTML or `-fsS` is rejected | `curl` is an alias for `Invoke-WebRequest` | Use `curl.exe` in commands |
+| Windows: `docker` is not recognized | Docker Desktop is not running, or PATH was updated after the terminal opened | Start Docker Desktop and open a new PowerShell window |
+| macOS: `python3: command not found` | Python 3 is not installed; the runner only needs it to create `.env` or repair the DB password | `xcode-select --install` or `brew install python` |
+| macOS: `Cannot connect to the Docker daemon` | Docker Desktop is not running | Start Docker Desktop and wait for the whale icon to be idle |
 | Browser job fails with `Browser jobs require EGRESS_PROXY_URL` | Worker did not receive the shared backend environment | Use the committed Compose files or set `EGRESS_PROXY_URL` on the worker |
 | Job ends `UPSTREAM_ERROR` after a timeout | The page never matched `wait_for` | Remove/relax `wait_for`; `example.com` has no `<h1>` |
 | `401 Unauthorized` after a while | Access token expired (900 s) | Log in again or use an API key |
 | `402` / `429` responses | Plan quota or rate limit | Inspect `Retry-After` / quota headers, or raise the plan |
-| Dashboard returns `502` | API is not healthy | `./scripts/run.sh status` and check API logs |
+| Dashboard returns `502` | API is not healthy | Run the `status` command for your platform and check API logs |
 | `DevToolsActivePort file doesn't exist` | Chrome was not started headless, or Grid lacks shared memory | Keep `--headless=new`, `--disable-gpu`; Grid needs `shm_size: 2g` |
-| `Future attached to a different loop` in worker logs | Old worker image reused a pooled connection across Celery task loops | Rebuild with the current code (`./scripts/run.sh`) |
+| `Future attached to a different loop` in worker logs | Old worker image reused a pooled connection across Celery task loops | Rebuild with the current code (run the start command again) |
 
 Useful diagnostics:
 
@@ -704,6 +801,14 @@ Useful diagnostics:
 ./scripts/run.sh logs
 docker compose --project-directory . --env-file .env logs --tail=100 migrate
 docker inspect scrapeflow-worker-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | sort
+```
+
+```powershell
+# Windows PowerShell
+.\scripts\run.ps1 status
+.\scripts\run.ps1 logs
+docker compose --project-directory . --env-file .env logs --tail=100 migrate
+docker inspect scrapeflow-worker-1 --format '{{range .Config.Env}}{{println .}}{{end}}'
 ```
 
 ---
@@ -730,6 +835,9 @@ docker compose --project-directory . --env-file .env up -d --force-recreate api 
 docker compose exec api alembic current
 docker compose exec api alembic heads
 ```
+
+On Windows replace each `./scripts/run.sh` command with
+`.\scripts\run.ps1`; the direct `docker compose` commands are identical.
 
 Data lives in named Docker volumes: `scrapeflow_pgdata`,
 `scrapeflow_redisdata`, and `scrapeflow_miniodata` (or the S3-mock container).
@@ -827,7 +935,7 @@ scrapeflow/
   migrations      Alembic migrations
   tests           unit / integration / e2e / load
   deploy          production Compose, Caddy, Prometheus, Grafana
-  scripts         run.sh, env generator, seed, bucket setup
+  scripts         run.sh, run-macos.sh, run.ps1, run.cmd, env generator, seed, bucket setup
 docs/
   runbook.md      deploy, rollback, backup, incident response
   security-checklist.md

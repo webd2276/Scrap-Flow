@@ -61,7 +61,7 @@ TEST_REDIS_URL='redis://127.0.0.1:56379/0' \
 .venv/bin/pytest -q --cov=apps --cov=packages --cov-report=term-missing
 ```
 
-Result: **313 passed, 3 skipped, 83.02% branch/line coverage**.
+Result: **322 passed, 3 skipped, 83.08% branch/line coverage**.
 
 Skips:
 
@@ -139,6 +139,28 @@ Two production defects were found and fixed during this run:
    `Future attached to a different loop`. The worker engine now uses
    `NullPool` (`create_engine(..., null_pool=True)`), and an integration test
    runs the reaper across two separate loops.
+
+### Cross-platform runners (2026-11-09)
+
+The one-command stack runner is now available for all three desktop platforms:
+
+| Entry point | Platform | Behaviour |
+|---|---|---|
+| `scripts/run.sh` | Linux | Shared implementation: start, logs, status, seed, fix-db-password, stop, reset |
+| `scripts/run-macos.sh` | macOS | Checks Docker Desktop/Python, then delegates to `run.sh` |
+| `scripts/run.ps1` | Windows | Native PowerShell 5.1+ implementation; generates `.env` and the S3-mock override without Python, Bash, or curl |
+| `scripts/run.cmd` | Windows CMD | Launches `run.ps1` with `-ExecutionPolicy Bypass` |
+
+Verified on this host:
+
+- `bash -n` passes for `run.sh` and `run-macos.sh`; the macOS wrapper delegates
+  correctly when run on Linux.
+- `run.ps1` parses cleanly and was exercised with PowerShell 7.4.6 on Linux:
+  `status`, `fix-db-password` (including UTF-8 SQL over stdin), and `.env`
+  generation (64-character secrets, matching DB password, mode 600, no BOM).
+- Native Windows PowerShell 5.1 + Docker Desktop and native macOS execution were
+  not available on this host and remain **UNVERIFIED**; the scripts target those
+  environments but were not run there.
 
 ## 4. Security review summary
 

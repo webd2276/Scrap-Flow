@@ -303,7 +303,7 @@ because Locust is not installed on this host.
 | REQ-013 | Done | `/metrics` serves the required Prometheus series `apps/api/routers/metrics.py`, `packages/core/observability.py`; HTTP counters/histograms are recorded with route templates and `/metrics` is excluded from its own counters. Queue depth, browser sessions, webhook backlog, and DB/Redis latency are sampled at scrape time with a timeout. Workers aggregate prefork counters through `PROMETHEUS_MULTIPROC_DIR` (`apps/worker/celery_app.py`). JSON logs, `/health`, `/ready`, and PII-free Sentry init are covered by tests. Optional `METRICS_TOKEN` and `METRICS_ENABLED` controls are tested. |
 | REQ-062 | Done | `RequestContextMiddleware` accepts a safe `X-Request-ID` or generates one, echoes it on the response, binds it to structlog context, and writes it on every access line. Workers bind `job_id` for execution and post-terminal hooks. Unit tests assert JSON log fields, the echoed header, invalid-id replacement, and worker binding. |
 | REQ-063 | Done | Standard-library Python and Node clients under `docs/examples/` submit with an idempotency key, poll to a terminal state, print results, and surface typed error envelopes. `docs/examples/README.md` documents credentials and browser-rendering limits. |
-| REQ-067 | Done | Python: 313 passed, 3 skipped, 83.02% coverage; the skips are Chrome/Grid and a Locust import check. New tests cover `/metrics` content, token/disabled behavior, HTTP counters, real PG/Redis sampling, quota rejection metrics, JSON log fields, worker `job_id` binding, Sentry init, and the load-script shape. Web: 30 Vitest tests, lint, typecheck, and build; Playwright Chromium 5 passed, 2 skipped. |
+| REQ-067 | Done | Python: 322 passed, 3 skipped, 83.08% coverage; the skips are Chrome/Grid and a Locust import check. New tests cover `/metrics` content, token/disabled behavior, HTTP counters, real PG/Redis sampling, quota rejection metrics, JSON log fields, worker `job_id` binding, Sentry init, the load-script shape, and the cross-platform runner entry points. Web: 30 Vitest tests, lint, typecheck, and build; Playwright Chromium 5 passed, 2 skipped. |
 | REQ-077 | Partial | CI gains a Node 22 dashboard job (npm ci, lint, typecheck, Vitest, build) and builds both the backend and web images; the backend image path now points at `scrapeflow/`. The workflow was not executed on GitHub Actions from this host, so CI green is **UNVERIFIED** until the next push/PR run. |
 
 Phase 9 explicit gaps carried forward:
@@ -328,9 +328,17 @@ host. All other services used the committed compose file.
 | REQ-013 | Done | The worker's multiprocess metrics endpoint on `127.0.0.1:9101` exposed `scrapeflow_jobs_total{kind="scrape",status="succeeded"} 2`, matching job completions. API `/metrics` also returned the queue/session/webhook/DB/Redis gauges. |
 | REQ-027 | Done | Celery Beat ran in the stack and logged 153 dispatches covering `reap`, `dispatch_schedules`, and `deliver_webhooks`. |
 | REQ-058 | Partial | The worker uploaded `result.json`, `page.html`, and `screenshot.png` to the S3-compatible store with matching sizes and SHA-256 digests. `GET /v1/artifacts/{id}/download` returned a 307 presigned redirect and S3 returned 200. Real MinIO lifecycle rules remain UNVERIFIED. |
-| REQ-067 | Done | Python: 316 passed, 3 skipped, 83.03% coverage. The new tests guard the shared worker compose environment and run the reaper across two event loops. The skips remain Chrome/Grid (unit-injected instead), a Grid-only worker test, and the Locust import check. |
+| REQ-067 | Done | Python: 322 passed, 3 skipped, 83.08% coverage. The new tests guard the shared worker compose environment, run the reaper across two event loops, and check every platform runner entry point. The skips remain Chrome/Grid (unit-injected instead), a Grid-only worker test, and the Locust import check. |
 | REQ-071 | Done | Full dev compose startup verified: `postgres`, `redis`, `minio` healthy; `migrate` and `minio-init` exited 0; `api`, `web`, `worker`, `beat`, `egress-proxy`, `selenium` up. `web` served `/login` with HTTP 200 in its read-only container. |
 | REQ-075 | Done | Live verification found and fixed two defects: the worker compose `environment` mapping replaced the shared anchor (dropping `EGRESS_PROXY_URL` and `ARTIFACTS_*`), and the worker reused pooled asyncpg connections across Celery task event loops. Both now have regression tests. |
+
+## Live delta after cross-platform runner work (2026-11-09)
+
+| Area | Status | Live evidence |
+|---|---|---|
+| Linux/macOS runner | Done | `run.sh` remains the shared Bash implementation; `run-macos.sh` adds Docker Desktop and Python checks and delegates to it. `bash -n` passes for both. The macOS wrapper was exercised on Linux by delegation, including `status`. |
+| Windows runner | Partial | `run.ps1` targets PowerShell 5.1+ and has no Bash/Python/curl dependency. It was syntax-checked and exercised with PowerShell 7.4.6 on Linux for `status`, `fix-db-password`, and `.env` generation. Native Windows PowerShell 5.1 + Docker Desktop remains **UNVERIFIED**. |
+| Runner documentation | Done | `SETUP.md` and `scrapeflow/README.md` list Linux, macOS, PowerShell, and CMD entry points; `.gitattributes` pins LF for shell/YAML and CRLF for Windows launchers. |
 
 Full-stack explicit gaps:
 - The official MinIO image could not be pulled, so MinIO-specific lifecycle,

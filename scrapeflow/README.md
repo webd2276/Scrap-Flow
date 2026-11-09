@@ -12,8 +12,8 @@ described in `docs/analysis/04-plan.md`.
 hardening.** All planned phases are implemented. The dev Compose stack was run
 end to end with a real browser scrape, S3-compatible artifact storage (verified
 with `adobe/s3mock` because the pinned MinIO tag returned `401`), live Celery
-Beat, and the dashboard. The Python suite is 316 passed with 3 skips
-(Chrome/Grid and Locust not installed locally) at 83.03% coverage; web lint,
+Beat, and the dashboard. The Python suite is 322 passed with 3 skips
+(Chrome/Grid and Locust not installed locally) at 83.08% coverage; web lint,
 typecheck, Vitest, build, and Chromium E2E pass. Live Stripe checkout, the
 official MinIO image/lifecycle, the production Caddy topology, real commercial
 proxy gateways, a real external webhook receiver, hosted CI, and Locust
@@ -25,6 +25,9 @@ capacity remain **UNVERIFIED** (no credentials/infrastructure). See
 - Docker + Docker Compose (full stack), or
 - Python 3.12 + `uv`, PostgreSQL, and Redis for local development.
 - Node 22 + npm for the dashboard (`apps/web`).
+- Windows: Docker Desktop + PowerShell 5.1+ for the native runner, or WSL 2 /
+  Git Bash for the Bash runner.
+- macOS: Docker Desktop; `scripts/run-macos.sh` wraps the shared Bash runner.
 
 ## Quick start (Docker)
 
@@ -32,18 +35,22 @@ One command builds and starts the whole stack, creates `.env` if missing, falls
 back to an S3-compatible mock when the MinIO image is unavailable, and waits for
 readiness:
 
-```bash
-./scripts/run.sh
-```
+| Platform | Command |
+|---|---|
+| Linux | `./scripts/run.sh` |
+| macOS | `./scripts/run-macos.sh` |
+| Windows PowerShell | `powershell -ExecutionPolicy Bypass -File .\scripts\run.ps1` |
+| Windows CMD | `scripts\run.cmd` |
 
 Then open <http://127.0.0.1:3000> and sign up, or use the API at
-<http://127.0.0.1:8000>. Control it with
-`./scripts/run.sh logs|status|seed|fix-db-password|stop|reset`.
+<http://127.0.0.1:8000>. Control it with `logs`, `status`, `seed`,
+`fix-db-password`, `stop`, or `reset` after the platform command above.
 
 If startup fails with `password authentication failed` for the database, the
-Postgres volume predates the current `.env`. `./scripts/run.sh fix-db-password`
-updates the role from `DATABASE_URL` without deleting data; `reset` deletes the
-local volumes instead.
+Postgres volume predates the current `.env`. `fix-db-password` updates the role
+from `DATABASE_URL` without deleting data; `reset` deletes the local volumes
+instead. The native Windows runner needs only Docker Desktop and PowerShell; it
+generates `.env` itself and does not require Bash, Python, or curl.
 
 Manual equivalent:
 
