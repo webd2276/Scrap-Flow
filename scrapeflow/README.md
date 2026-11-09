@@ -33,7 +33,13 @@ readiness:
 ```
 
 Then open <http://127.0.0.1:3000> and sign up, or use the API at
-<http://127.0.0.1:8000>. Control it with `./scripts/run.sh logs|status|seed|stop|reset`.
+<http://127.0.0.1:8000>. Control it with
+`./scripts/run.sh logs|status|seed|fix-db-password|stop|reset`.
+
+If startup fails with `password authentication failed` for the database, the
+Postgres volume predates the current `.env`. `./scripts/run.sh fix-db-password`
+updates the role from `DATABASE_URL` without deleting data; `reset` deletes the
+local volumes instead.
 
 Manual equivalent:
 

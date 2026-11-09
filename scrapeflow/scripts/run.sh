@@ -6,6 +6,7 @@
 #   ./scripts/run.sh logs       # follow API/worker/beat/web logs
 #   ./scripts/run.sh status     # container status
 #   ./scripts/run.sh seed       # create demo org/user/API key (prints once)
+#   ./scripts/run.sh fix-db-password  # sync the Postgres role to .env, keep data
 #   ./scripts/run.sh stop       # stop containers, keep data volumes
 #   ./scripts/run.sh reset      # stop containers and delete data volumes
 #
@@ -33,8 +34,43 @@ log() { printf '\n==> %s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+env_value() {
+  local key="$1"
+  python3 - "$ENV_FILE" "$key" <<'PY'
+import sys
+from pathlib import Path
+
+path, key = sys.argv[1], sys.argv[2]
+for line in Path(path).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("#") or "=" not in stripped:
+        continue
+    name, value = stripped.split("=", 1)
+    if name.strip() == key:
+        print(value.strip())
+        break
+PY
+}
+
 usage() {
-  sed -n '2,20p' "$SELF" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+Start (or control) the complete ScrapeFlow stack with one command.
+
+Usage:
+  ./scripts/run.sh                   build + start, wait for readiness
+  ./scripts/run.sh logs              follow API/worker/beat/web logs
+  ./scripts/run.sh status            container status
+  ./scripts/run.sh seed              create demo org/user/API key (prints once)
+  ./scripts/run.sh fix-db-password   sync the Postgres role to .env, keep data
+  ./scripts/run.sh stop              stop containers, keep data volumes
+  ./scripts/run.sh reset             stop containers and delete data volumes
+
+Environment:
+  SF_S3_MODE=auto|minio|s3mock       default: auto
+  SF_ENV_FILE=/path/.env             default: <repo>/.env
+  SF_HEALTH_TIMEOUT=240              seconds to wait for /ready
+  MINIO_IMAGE=...                    image tried in auto/minio mode
+EOF
 }
 
 compose() {
@@ -143,7 +179,22 @@ start() {
   select_s3
 
   log "Building and starting ScrapeFlow (first run can take several minutes)"
-  compose up -d --build
+  if ! compose up -d --build; then
+    compose logs --tail=40 migrate >&2 || true
+    cat >&2 <<'EOF'
+
+Startup failed. If migrate reports "password authentication failed", the
+PostgreSQL data volume was created with a different password than the current
+.env. Repair it without deleting data:
+
+  ./scripts/run.sh fix-db-password
+
+Or delete local data and start clean:
+
+  ./scripts/run.sh reset
+EOF
+    exit 1
+  fi
 
   wait_for_api
   wait_for_web
@@ -169,6 +220,62 @@ S3 mode: ${S3_MODE}
 EOF
 }
 
+fix_db_password() {
+  require_prerequisites
+
+  local user
+  user="$(env_value POSTGRES_USER)"
+  user="${user:-scrapeflow}"
+
+  log "Starting PostgreSQL"
+  compose up -d postgres
+
+  local deadline=$((SECONDS + 90))
+  until compose exec -T postgres pg_isready -U "$user" -d postgres >/dev/null 2>&1; do
+    ((SECONDS < deadline)) || die "PostgreSQL did not become ready"
+    sleep 2
+  done
+
+  mkdir -p "$RUN_DIR"
+  local sql_file="$RUN_DIR/fix-db-password.sql"
+  (
+    umask 077
+    python3 - "$ENV_FILE" >"$sql_file" <<'PY'
+import re
+import sys
+import urllib.parse
+from pathlib import Path
+
+env: dict[str, str] = {}
+for line in Path(sys.argv[1]).read_text().splitlines():
+    stripped = line.strip()
+    if stripped.startswith("#") or "=" not in stripped:
+        continue
+    name, value = stripped.split("=", 1)
+    env[name.strip()] = value.strip()
+
+url = env.get("DATABASE_URL", "")
+match = re.match(r"^[^:]+://([^:]+):([^@]*)@", url)
+if not match:
+    raise SystemExit("DATABASE_URL is missing a user/password")
+
+user = urllib.parse.unquote(match.group(1))
+password = urllib.parse.unquote(match.group(2))
+role = user.replace('"', '""')
+literal = password.replace("'", "''")
+print(f'ALTER ROLE "{role}" WITH PASSWORD \'{literal}\';')
+print(f"\\echo role {user} now matches DATABASE_URL")
+PY
+  ) || {
+    rm -f "$sql_file"
+    die "could not read DATABASE_URL from $ENV_FILE"
+  }
+
+  compose exec -T postgres psql -U "$user" -d postgres -v ON_ERROR_STOP=1 <"$sql_file"
+  rm -f "$sql_file"
+  log "Postgres role password now matches DATABASE_URL"
+}
+
 case "${1:-start}" in
   start)
     start
@@ -184,6 +291,9 @@ case "${1:-start}" in
   seed)
     [ -f "$ENV_FILE" ] || die "missing environment file: $ENV_FILE"
     compose exec api python -m scripts.seed
+    ;;
+  fix-db-password)
+    fix_db_password
     ;;
   stop)
     [ -f "$ENV_FILE" ] || die "missing environment file: $ENV_FILE"
