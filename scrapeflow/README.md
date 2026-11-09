@@ -4,22 +4,17 @@ Multi-tenant web scraping and browser-automation API. This repository is being
 rebuilt from the original single-process MVP into the production architecture
 described in `docs/analysis/04-plan.md`.
 
-**Status: Phase 9 complete — observability, load profile, security review, and docs.**
-Phase 9 adds Prometheus metrics for API traffic, job duration/failures, queue
-depth, active browser sessions, webhook delivery/backlog, quota rejections,
-rate-limit hits, and DB/Redis latency; the API serves `/metrics` (optional
-bearer token) and workers aggregate prefork counters through
-`PROMETHEUS_MULTIPROC_DIR`. JSON logs carry `request_id` on every request and
-`job_id` for the full worker execution, Sentry stays PII-free, and
-`deploy/prometheus/` + `deploy/grafana/` provide scrape config, alert rules,
-and a provisioned dashboard. A Locust profile lives in `tests/load/`.
-`docs/runbook.md`, `docs/security-checklist.md`, and `docs/FINAL_REPORT.md`
-cover operations and the release evidence. The Python suite is 313 passed with
-3 skips (Chrome/Grid and Locust not installed locally) at 83.02% coverage; web
-lint, typecheck, Vitest, build, and Chromium E2E pass. Live Stripe checkout,
-Selenium Grid, MinIO/S3, live Celery Beat, real commercial proxy gateways, and
-a real external webhook receiver remain **UNVERIFIED** (no credentials/stack).
-See `docs/analysis/02-gap-matrix.md` for the live gap list.
+**Status: Phase 10 complete — full-stack Compose verification and worker
+hardening.** All planned phases are implemented. The dev Compose stack was run
+end to end with a real browser scrape, S3-compatible artifact storage (verified
+with `adobe/s3mock` because the pinned MinIO tag returned `401`), live Celery
+Beat, and the dashboard. The Python suite is 316 passed with 3 skips
+(Chrome/Grid and Locust not installed locally) at 83.03% coverage; web lint,
+typecheck, Vitest, build, and Chromium E2E pass. Live Stripe checkout, the
+official MinIO image/lifecycle, the production Caddy topology, real commercial
+proxy gateways, a real external webhook receiver, hosted CI, and Locust
+capacity remain **UNVERIFIED** (no credentials/infrastructure). See
+`docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Requirements
 
@@ -29,12 +24,27 @@ See `docs/analysis/02-gap-matrix.md` for the live gap list.
 
 ## Quick start (Docker)
 
+One command builds and starts the whole stack, creates `.env` if missing, falls
+back to an S3-compatible mock when the MinIO image is unavailable, and waits for
+readiness:
+
 ```bash
-cp .env.example .env
+./scripts/run.sh
+```
+
+Then open <http://127.0.0.1:3000> and sign up, or use the API at
+<http://127.0.0.1:8000>. Control it with `./scripts/run.sh logs|status|seed|stop|reset`.
+
+Manual equivalent:
+
+```bash
 python3 scripts/generate_env.py     # creates .env with random secrets; never overwrites
 docker compose up --build
 docker compose exec api python -m scripts.seed   # prints demo password + API key once
 ```
+
+If the pinned MinIO image cannot be pulled, either set `SF_S3_MODE=s3mock` or
+mirror a working MinIO image and set `MINIO_IMAGE=...`.
 
 Migrations run automatically in the one-shot `migrate` service before the API,
 worker, and beat start.

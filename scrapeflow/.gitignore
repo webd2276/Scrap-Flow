@@ -30,3 +30,4 @@ blob-report/
 *.sqlite3
 pgdata/
 redisdata/
+.run/
