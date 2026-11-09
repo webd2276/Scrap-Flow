@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
 
 concurrency:
@@ -12,6 +12,9 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: scrapeflow
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -33,6 +36,9 @@ jobs:
 
   integration:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: scrapeflow
     services:
       postgres:
         image: postgres:16-alpine
