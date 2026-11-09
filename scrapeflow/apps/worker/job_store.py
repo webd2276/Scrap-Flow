@@ -23,7 +23,7 @@ _TERMINAL_STATUSES = frozenset(
 def sessionmaker(settings: Settings) -> async_sessionmaker[AsyncSession]:
     global _engine, _sessionmaker
     if _sessionmaker is None:
-        _engine = create_engine(settings)
+        _engine = create_engine(settings, null_pool=True)
         _sessionmaker = create_sessionmaker(_engine)
     return _sessionmaker
 

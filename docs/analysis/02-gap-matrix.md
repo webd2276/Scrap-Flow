@@ -285,7 +285,10 @@ Phase 8 explicit gaps carried forward:
 - Playwright runs against Chromium only; Firefox/WebKit are not exercised.
 - The two env-authenticated UI specs are skipped unless `E2E_EMAIL`/`E2E_PASSWORD` are supplied; the self-contained journey covers the same routes.
 - Billing checkout/portal redirects reject non-HTTPS URLs, but live Stripe redirects remain UNVERIFIED (no Stripe test keys).
-- A full `docker compose up` (web + Caddy + API + worker + Grid) remains UNVERIFIED; compose rendering plus a successful web image build and read-only container smoke test are the local evidence.
+- The full dev `docker compose up` (web + API + worker + Grid + S3-compatible
+  store) was later verified on 2026-11-08; see the live delta below. The
+  production compose file with Caddy and the official MinIO image remains
+  unstarted.
 
 ## Live delta after Phase 9 (2026-11-07)
 
@@ -307,4 +310,34 @@ Phase 9 explicit gaps carried forward:
 - Prometheus and Grafana configuration and the optional compose overlay render, but the stack was not started on this host; alert delivery is untested.
 - The Locust profile parses and its non-import smoke test passes, but a real load run produced no capacity numbers here.
 - The CI workflow is configuration-validated only; hosted-runner execution remains UNVERIFIED.
-- Live Stripe, Selenium Grid, MinIO/S3, live Celery Beat, real proxy gateways, and a real external webhook receiver remain UNVERIFIED.
+- Live Stripe, the official MinIO image, a real commercial proxy gateway, a
+  real external webhook receiver, the production compose topology, and hosted
+  CI remain UNVERIFIED. Selenium Grid, live Celery Beat, and S3 artifact
+  semantics were verified later in the dev stack; see the live delta below.
+
+## Live delta after full-stack compose verification (2026-11-08)
+
+The dev compose topology was started with a local S3-compatible service
+(`adobe/s3mock`) because the pinned `quay.io/minio/minio` tag returned
+`401 UNAUTHORIZED` and Docker Hub has no `minio/minio` repository from this
+host. All other services used the committed compose file.
+
+| REQ | Status | Live evidence |
+|---|---|---|
+| REQ-003 | Done | A real `render_js=true` scrape succeeded through the running stack: CLI → FastAPI → Celery worker → Selenium Grid → validating egress proxy → `example.com`, then back through the worker. Duration 1.1 s; `title`, selector values, and text were populated. |
+| REQ-013 | Done | The worker's multiprocess metrics endpoint on `127.0.0.1:9101` exposed `scrapeflow_jobs_total{kind="scrape",status="succeeded"} 2`, matching job completions. API `/metrics` also returned the queue/session/webhook/DB/Redis gauges. |
+| REQ-027 | Done | Celery Beat ran in the stack and logged 153 dispatches covering `reap`, `dispatch_schedules`, and `deliver_webhooks`. |
+| REQ-058 | Partial | The worker uploaded `result.json`, `page.html`, and `screenshot.png` to the S3-compatible store with matching sizes and SHA-256 digests. `GET /v1/artifacts/{id}/download` returned a 307 presigned redirect and S3 returned 200. Real MinIO lifecycle rules remain UNVERIFIED. |
+| REQ-067 | Done | Python: 316 passed, 3 skipped, 83.03% coverage. The new tests guard the shared worker compose environment and run the reaper across two event loops. The skips remain Chrome/Grid (unit-injected instead), a Grid-only worker test, and the Locust import check. |
+| REQ-071 | Done | Full dev compose startup verified: `postgres`, `redis`, `minio` healthy; `migrate` and `minio-init` exited 0; `api`, `web`, `worker`, `beat`, `egress-proxy`, `selenium` up. `web` served `/login` with HTTP 200 in its read-only container. |
+| REQ-075 | Done | Live verification found and fixed two defects: the worker compose `environment` mapping replaced the shared anchor (dropping `EGRESS_PROXY_URL` and `ARTIFACTS_*`), and the worker reused pooled asyncpg connections across Celery task event loops. Both now have regression tests. |
+
+Full-stack explicit gaps:
+- The official MinIO image could not be pulled, so MinIO-specific lifecycle,
+  replication, and console behavior are unverified; S3 semantics were verified
+  with `adobe/s3mock`.
+- The production compose topology with Caddy and production images was not
+  started.
+- Live Stripe, a real commercial proxy gateway, a real external webhook
+  receiver, hosted GitHub Actions, and a real Locust capacity run remain
+  UNVERIFIED.

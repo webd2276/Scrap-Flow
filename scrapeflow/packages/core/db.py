@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from packages.core.settings import Settings
 
@@ -30,7 +31,20 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-def create_engine(settings: Settings) -> AsyncEngine:
+def create_engine(settings: Settings, *, null_pool: bool = False) -> AsyncEngine:
+    """Build an async engine.
+
+    Celery tasks execute each async entrypoint with a fresh ``asyncio.run`` loop.
+    A pooled async connection is bound to the loop that created it, so worker
+    code must use ``null_pool=True`` to avoid reusing a connection from a prior
+    task loop.
+    """
+    if null_pool:
+        return create_async_engine(
+            settings.database_url,
+            pool_pre_ping=True,
+            poolclass=NullPool,
+        )
     return create_async_engine(
         settings.database_url,
         pool_pre_ping=True,

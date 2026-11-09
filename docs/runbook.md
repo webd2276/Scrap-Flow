@@ -58,6 +58,51 @@ failed dependency. Do not route traffic to an instance that fails readiness.
 Dashboard: browse to `https://$DOMAIN`, sign up, and confirm the job submission
 page loads. The browser never receives the API origin or refresh token.
 
+### Post-deploy full-stack smoke test
+
+Run this once after every deploy. It exercises the API → queue → worker →
+Grid → egress proxy path and the artifact store, not just liveness.
+
+```bash
+STAMP=$(date +%s)
+EMAIL="smoke-${STAMP}@example.com"
+TOKEN=$(curl -fsS -X POST "https://$DOMAIN/v1/auth/signup" \
+  -H 'Content-Type: application/json' \
+  -d "{\"org_name\":\"Smoke ${STAMP}\",\"email\":\"${EMAIL}\",\
+\"password\":\"$(openssl rand -base64 24)\",\"tos_accepted\":true}" | jq -r .access_token)
+
+JOB=$(curl -fsS -X POST "https://$DOMAIN/v1/scrape" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com/","render_js":true,
+       "selectors":{"title":{"css":"title"}},"screenshot":true,
+       "include_html":true,"timeout_seconds":60}' | jq -r .job.id)
+
+for _ in $(seq 1 45); do
+  STATUS=$(curl -fsS "https://$DOMAIN/v1/jobs/$JOB" \
+    -H "Authorization: Bearer $TOKEN" | jq -r .status)
+  case "$STATUS" in succeeded|failed|cancelled|timed_out) break;; esac
+  sleep 2
+done
+test "$STATUS" = succeeded || { echo "smoke job ended as $STATUS"; exit 1; }
+
+curl -fsS "https://$DOMAIN/v1/jobs/$JOB/artifacts" \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.[] | "\(.kind) \(.size_bytes) \(.sha256)"'
+```
+
+Expected: `STATUS=succeeded` and three artifacts (`result`, `html`,
+`screenshot`) with non-zero sizes. The worker only exposes `9101` inside the
+compose network, so read the counter through the container:
+
+```bash
+docker compose --project-directory . -f deploy/compose.prod.yml --env-file .env \
+  exec worker python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9101/metrics').read().decode())" \
+  | grep scrapeflow_jobs_total
+```
+
+A job that stays `queued` means Beat/worker are not consuming; `running` past
+its timeout points at Grid or the egress proxy. Check `docker compose logs
+worker beat selenium egress-proxy` before rolling back.
+
 ### Configuration that must not be skipped
 
 - `METRICS_ENABLED=true` and a random `METRICS_TOKEN` when `/metrics` is

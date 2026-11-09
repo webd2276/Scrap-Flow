@@ -346,3 +346,26 @@ router template rather than raw paths to bound cardinality, and `/metrics` is
 excluded from its own counters. Scrape-time queue/session/DB/Redis gauges are
 best-effort: a slow dependency logs `metrics.runtime_sample_failed` without
 failing the scrape.
+
+## D-046 — Compose services share one backend environment anchor
+Alternatives: duplicate the browser/egress/artifact variables in every service,
+or rely on the `x-backend` merge to compose them.
+Reason: YAML merge keys are shallow. The worker needs extra variables
+(`EGRESS_JOB_PROXY_*`, `PROMETHEUS_MULTIPROC_DIR`, `WORKER_METRICS_ENABLED`), and
+its own `environment` mapping replaced the inherited one, silently dropping
+`EGRESS_PROXY_URL` and `ARTIFACTS_*`. Browser jobs then failed closed and
+artifact writes would have used local storage. Dev and prod now define a shared
+`x-backend-env` anchor and merge it explicitly in the worker, with a unit test
+that fails if the worker loses any shared key.
+
+## D-047 — Worker database access uses NullPool across Celery task loops
+Alternatives: keep the default pool, dispose the engine after every task, or
+run one persistent event loop for the worker.
+Reason: Celery invokes each task entrypoint with `asyncio.run`, so every task
+gets a fresh event loop. A pooled asyncpg connection is bound to the loop that
+created it; reusing the process-global engine handed the reaper a connection
+from a previous loop and produced `Future attached to a different loop`.
+`create_engine(..., null_pool=True)` opens and closes a connection inside the
+current task loop, trading a small per-task connect cost for correctness. The
+API keeps its pooling engine because it owns one long-lived loop. An integration
+test runs the reaper across two loops.

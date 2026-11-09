@@ -21,6 +21,7 @@ from packages.core.errors import AppError, ErrorCode
 from packages.core.models import Job, JobKind, JobStatus
 from packages.core.settings import Settings
 from packages.core.ssrf import SSRFPolicy
+from redis.asyncio import Redis
 from tests.integration.conftest import signup_payload
 
 PAGE = b"""<!doctype html>
@@ -364,6 +365,35 @@ def test_reaper_requeues_and_fails_lost_jobs(client: Any, integration_settings: 
     assert lost["status"] == "failed"
     assert lost["error_code"] == "WORKER_LOST"
     assert requeued["id"] in dispatched
+
+
+def test_reaper_reuses_engine_across_event_loops(integration_settings: Settings) -> None:
+    """Celery runs every task in a fresh event loop.
+
+    The worker engine must not hand a pooled asyncpg connection from a previous
+    task loop to the next task. This reproduced a RuntimeError in the live
+    compose stack before the worker switched to NullPool.
+    """
+
+    async def clear_lock() -> None:
+        redis = Redis.from_url(integration_settings.redis_url, decode_responses=True)
+        try:
+            await redis.delete("sf:reaper:lock")
+        finally:
+            await redis.aclose()
+
+    async def run_once() -> dict[str, int]:
+        return await _reap(settings=integration_settings)
+
+    try:
+        first = asyncio.run(run_once())
+        asyncio.run(clear_lock())
+        second = asyncio.run(run_once())
+    finally:
+        asyncio.run(job_store.dispose())
+
+    assert first["requeued"] == 0
+    assert second["requeued"] == 0
 
 
 def test_browser_path_requires_validated_proxy(integration_settings: Settings) -> None:

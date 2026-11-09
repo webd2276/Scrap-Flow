@@ -1,7 +1,8 @@
 # ScrapeFlow final report
 
-Date: 2026-11-07
-Scope: Phases 1–9 of `docs/analysis/04-plan.md` in this repository.
+Date: 2026-11-08
+Scope: Phases 1–9 of `docs/analysis/04-plan.md` plus the hardening fixes found
+during full-stack compose verification.
 
 ## 1. Outcome
 
@@ -96,6 +97,49 @@ Phase 9 tests specifically cover:
 - Sentry initialisation with `send_default_pii=False`.
 - Worker multiprocess metrics branch and the load-script shape.
 
+### Full-stack compose verification (2026-11-08)
+
+The dev compose file was started on this host with a local S3-compatible service
+(`adobe/s3mock`) because the pinned `quay.io/minio/minio` tag returned
+`401 UNAUTHORIZED` and Docker Hub has no `minio/minio` image. Every other
+service used the committed configuration:
+
+```bash
+docker compose --project-directory . -f docker-compose.yml \
+  -f /tmp/sf-compose-override.yml --env-file .env up -d
+```
+
+Observed:
+
+| Check | Result |
+|---|---|
+| Service startup | `postgres`, `redis`, `minio` (S3 mock) healthy; `migrate` and `minio-init` exited 0; `api`, `web`, `worker`, `beat`, `egress-proxy`, `selenium` up |
+| API liveness/readiness | `/health` 200, `/ready` 200 |
+| Worker metrics endpoint | `127.0.0.1:9101/metrics` served job counters and durations from the prefork children |
+| Celery Beat | 153 scheduled-task dispatches observed in the beat log (`reap`, `dispatch_schedules`, `deliver_webhooks`) |
+| Reaper stability | 20+ consecutive `reaper.completed` runs with no event-loop errors |
+| Browser scrape | `POST /v1/scrape` with `render_js=true`, `screenshot=true`, `include_html=true` succeeded in 1.1 s through Grid → egress proxy → worker |
+| Artifacts | `result.json`, `page.html`, and `screenshot.png` registered with sizes and SHA-256 digests |
+| Presigned download | `GET /v1/artifacts/{id}/download` returned 307 to S3; S3 GET returned 200 and every SHA-256 matched |
+| Dashboard container | `http://127.0.0.1:3000/login` returned 200 and rendered the sign-in form |
+| API logs | JSON access lines carried `request_id`; the worker carried `job_id` |
+
+Two production defects were found and fixed during this run:
+
+1. **Worker compose environment was replaced, not merged.** YAML merge keys are
+   shallow, so the worker's extra `environment` mapping dropped
+   `EGRESS_PROXY_URL` and the `ARTIFACTS_*` settings inherited from the
+   `x-backend` anchor. Browser jobs failed with
+   `Browser jobs require EGRESS_PROXY_URL` and artifacts would have fallen back
+   to local storage. Both dev and prod compose now inherit from a shared
+   `x-backend-env` anchor, and a unit test guards the worker mapping.
+2. **The worker reused a pooled asyncpg connection across event loops.** Celery
+   runs each task with a fresh `asyncio.run` loop; the process-global engine
+   handed the previous loop's connection to the reaper, producing
+   `Future attached to a different loop`. The worker engine now uses
+   `NullPool` (`create_engine(..., null_pool=True)`), and an integration test
+   runs the reaper across two separate loops.
+
 ## 4. Security review summary
 
 The full checklist is `docs/security-checklist.md`. Key verified controls:
@@ -128,19 +172,23 @@ These are not claimed as working because they were not exercised end to end:
 
 1. **Live Stripe checkout/portal**: no Stripe test keys. Signed webhook events,
    idempotency, and billing state transitions are unit/integration tested.
-2. **Selenium Grid in compose**: no full compose/Grid startup. The browser
-   engine, step semantics, timeout, and reaper are tested with fakes and a local
-   Chrome path when `CHROME_BINARY` is supplied.
-3. **MinIO/S3 upload, presign, and lifecycle**: no live bucket. Local artifact
-   storage and the storage abstraction are tested.
-4. **Live Celery Beat + real external webhook receiver**: dispatch, dedupe,
-   retries, DLQ, and HMAC signing are tested; a real receiver was not run.
+2. **Official MinIO image and lifecycle features**: the pinned
+   `quay.io/minio/minio` tag returned `401 UNAUTHORIZED` and Docker Hub has no
+   `minio/minio` repository from this host. S3 upload, presign, download, and
+   digest checks were verified against `adobe/s3mock` instead. MinIO-specific
+   lifecycle rules, replication, and console behavior remain unverified.
+3. **Selenium Grid + Celery Beat in compose**: both were exercised in the dev
+   stack. Grid served real Chrome sessions and Beat dispatched scheduled tasks.
+   The production compose file (Caddy, production images, real MinIO) was not
+   started on this host.
+4. **Real external webhook receiver**: dispatch, dedupe, retries, DLQ, and HMAC
+   signing are tested; delivery to a third-party receiver was not run.
 5. **Commercial proxy gateway**: no provider account. Parsing, rotation,
    health failover, retry safety, and upstream forwarding are tested; the
    gateway's real egress policy is not.
-6. **Full production compose/Grid/Caddy stack** and **hosted CI run**: both
-   configurations render, images build, and CI is configured, but the full
-   startup and the GitHub Actions execution were not observed here.
+6. **Full production compose/Caddy** and **hosted CI run**: both configurations
+   render, images build, and the dev stack ran end to end, but the production
+   topology and the GitHub Actions execution were not observed here.
 7. **Real load numbers**: the Locust profile exists and parses, but capacity
    must be measured on the target infrastructure.
 
@@ -164,8 +212,9 @@ through Caddy. Client examples are in `docs/examples/`.
 The codebase is ready for a staged release candidate with the following gates:
 
 1. Run the CI workflow on GitHub Actions and require it to pass.
-2. Bring up the full compose stack on a staging host and exercise Selenium Grid,
-   MinIO, live Beat, and an external webhook receiver.
+2. Bring up the full **production** compose topology (Caddy, production images,
+   real MinIO) on a staging host and exercise a browser scrape plus an external
+   webhook receiver.
 3. Configure Stripe test keys and complete a checkout/portal/webhook round trip.
 4. Run the Locust profile against staging and record p95 latency, error rate,
    queue depth, and worker/Grid saturation.

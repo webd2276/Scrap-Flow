@@ -1,17 +1,19 @@
 name: scrapeflow
 
+x-backend-env: &backend-env
+  SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
+  EGRESS_PROXY_URL: http://egress-proxy:8888
+  ARTIFACTS_ENDPOINT: http://minio:9000
+  ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET:-scrapeflow}
+  ARTIFACTS_ACCESS_KEY: ${MINIO_ROOT_USER:-scrapeflow}
+  ARTIFACTS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scrapeflow-dev-secret}
+
 x-backend: &backend
   build:
     context: .
     dockerfile: Dockerfile
   env_file: .env
-  environment:
-    SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
-    EGRESS_PROXY_URL: http://egress-proxy:8888
-    ARTIFACTS_ENDPOINT: http://minio:9000
-    ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET:-scrapeflow}
-    ARTIFACTS_ACCESS_KEY: ${MINIO_ROOT_USER:-scrapeflow}
-    ARTIFACTS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-scrapeflow-dev-secret}
+  environment: *backend-env
   restart: unless-stopped
   depends_on:
     postgres:
@@ -106,6 +108,7 @@ services:
     # Grid must be able to reach it, so bind on the container interface and
     # advertise the compose service name rather than loopback.
     environment:
+      <<: *backend-env
       EGRESS_JOB_PROXY_BIND_HOST: 0.0.0.0
       EGRESS_JOB_PROXY_ADVERTISE_HOST: worker
       # Celery prefork children share counters through this directory.

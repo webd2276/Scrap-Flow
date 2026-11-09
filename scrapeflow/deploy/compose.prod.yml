@@ -1,15 +1,17 @@
 name: scrapeflow-prod
 
+x-backend-env: &backend-env
+  SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
+  EGRESS_PROXY_URL: http://egress-proxy:8888
+  ARTIFACTS_ENDPOINT: http://minio:9000
+  ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET:?set ARTIFACTS_BUCKET}
+  ARTIFACTS_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
+  ARTIFACTS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+
 x-backend: &backend
   image: ${SCRAPEFLOW_IMAGE:-scrapeflow:latest}
   env_file: .env
-  environment:
-    SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
-    EGRESS_PROXY_URL: http://egress-proxy:8888
-    ARTIFACTS_ENDPOINT: http://minio:9000
-    ARTIFACTS_BUCKET: ${ARTIFACTS_BUCKET:?set ARTIFACTS_BUCKET}
-    ARTIFACTS_ACCESS_KEY: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER}
-    ARTIFACTS_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+  environment: *backend-env
   restart: always
   depends_on:
     postgres:
@@ -81,6 +83,7 @@ services:
     # must reach. Set the advertised host to a DNS name that resolves from the
     # Grid container (the compose service name by default).
     environment:
+      <<: *backend-env
       EGRESS_JOB_PROXY_BIND_HOST: 0.0.0.0
       EGRESS_JOB_PROXY_ADVERTISE_HOST: ${EGRESS_JOB_PROXY_ADVERTISE_HOST:-worker}
       # Celery prefork children share counters through this directory.
