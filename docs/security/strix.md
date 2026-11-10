@@ -11,7 +11,9 @@ Playwright). It does not replace any of them.
 | Surface | Trigger | Scope |
 | --- | --- | --- |
 | GitHub Actions (`.github/workflows/strix.yml`) | manual `workflow_dispatch` | committed source tree, optional diff scope |
-| Local script (`scrapeflow/scripts/security-scan.sh`) | developer | committed source tree, or the running API on `:8000` |
+| Linux (`scrapeflow/scripts/security-scan.sh`) | developer | committed source tree, or the running API on `:8000` |
+| macOS (`scrapeflow/scripts/security-scan-macos.sh`) | developer | same as Linux, after Docker Desktop checks |
+| Windows (`scrapeflow/scripts/security-scan.ps1`, `security-scan.cmd`) | developer | same as Linux, PowerShell 5.1+ |
 
 Strix is deliberately **not** part of the pull-request gate. A run needs an LLM
 key, costs money per scan, takes minutes, and produces findings that need human
@@ -48,32 +50,65 @@ agree on a budget owner first.
 
 ### From a workstation
 
+Install once, then use the entry point for your platform.
+
 ```bash
+uv tool install strix-agent==1.7.0
 export STRIX_LLM="openrouter/z-ai/glm-5.3"
 export LLM_API_KEY="..."
-uv tool install strix-agent==1.7.0
-
 cd scrapeflow
+```
 
-# Source audit against a detached worktree of HEAD.
-./scripts/security-scan.sh
+**Linux**
 
-# Black-box + contract scan of the local stack (Compose must be up).
-./scripts/security-scan.sh live
+```bash
+./scripts/security-scan.sh            # source audit, detached worktree of HEAD
+./scripts/security-scan.sh live       # contract + black-box scan of :8000
 
-# Grey-box scan with a disposable account.
 STRIX_TEST_EMAIL="you@example.com" \
 STRIX_TEST_PASSWORD="..." \
-./scripts/security-scan.sh live
+./scripts/security-scan.sh live       # grey-box
+```
 
-# Inspect the findings dashboard.
+**macOS**
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"   # uv tool install location
+./scripts/security-scan-macos.sh
+./scripts/security-scan-macos.sh live
+```
+
+The macOS wrapper verifies Docker Desktop (including its bundled CLI path) and
+the daemon before delegating to the shared Linux script, so the scan logic
+cannot drift. If Strix is missing it prints the install command.
+
+**Windows (PowerShell 5.1+)**
+
+```powershell
+$env:STRIX_LLM = "openrouter/z-ai/glm-5.3"
+$env:LLM_API_KEY = "..."
+.\scripts\security-scan.ps1
+.\scripts\security-scan.ps1 live
+
+# If the execution policy blocks .ps1 files:
+.\scripts\security-scan.cmd live
+```
+
+The PowerShell runner checks Docker Desktop, the daemon, `git`, the `strix`
+executable and the environment, then uses the same worktree and OpenAPI flows as
+the shell script. Reports land in `scrapeflow\strix_runs\`; `strix view` opens
+them.
+
+**All platforms**
+
+```bash
 strix view
 ```
 
 The source scan checks out `HEAD` into `.run/strix-worktree` because Strix mounts
 a local target **read-write**. Your working tree is never the target. Set
-`SF_STRIX_KEEP=1` to keep the worktree afterwards and review what the agent
-changed.
+`SF_STRIX_KEEP=1` (`$env:SF_STRIX_KEEP = "1"` on Windows) to keep the worktree
+afterwards and review what the agent changed.
 
 `live` mode downloads `/openapi.json` first, so the agent tests the 29 declared
 routes instead of crawling. Keep `SF_STRIX_BUDGET` (default `10`) and
@@ -112,10 +147,12 @@ report an issue that the code already mitigates elsewhere.
 
 Verified: `strix-agent==1.7.0` installs with `uv tool`, and its CLI accepts every
 flag this integration passes (`--scan-mode`, `--scope-mode`, `--fail-on`,
-`--max-budget`, `--max-turns`). The workflow and the local script are committed
-and syntax-checked; both failure paths (missing secrets, invalid budget, fatal
-scan exit) were exercised with a stub CLI.
+`--max-budget`, `--max-turns`). The workflow and all three local entry points are
+committed and syntax-checked; the shell script's failure paths (missing secrets,
+invalid budget, fatal scan exit) and the macOS wrapper's delegation were
+exercised with a stub CLI.
 
 Not yet run: an actual pentest. It needs a real LLM key plus the Docker sandbox
-image pull. Until one runs and its findings are triaged, treat this integration
+image pull. The PowerShell runner has not been executed on a Windows host either
+(no PowerShell in this environment), so treat both the scan and the Windows path
 as wired but unproven.
