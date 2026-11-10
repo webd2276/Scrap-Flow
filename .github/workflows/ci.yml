@@ -12,6 +12,13 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-24.04
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://scrapeflow:scrapeflow@127.0.0.1:5432/scrapeflow_test
+      REDIS_URL: redis://127.0.0.1:6379/0
+      API_KEY_PEPPER: ci-only-api-key-pepper-not-a-production-secret
+      JWT_SECRET: ci-only-jwt-secret-not-for-production-use
+      WEBHOOK_SECRET_KEY: ci-only-webhook-secret-not-for-production
     defaults:
       run:
         working-directory: scrapeflow
@@ -30,7 +37,7 @@ jobs:
       - name: Type check
         run: uv run mypy apps packages
       - name: Unit tests
-        run: uv run pytest tests/unit --cov --cov-report=term-missing -q
+        run: uv run pytest tests/unit -q
       - name: Dependency audit
         run: uv run pip-audit
 
@@ -59,6 +66,12 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql+asyncpg://scrapeflow:scrapeflow@localhost:5432/scrapeflow_test
       TEST_REDIS_URL: redis://localhost:6379/0
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://scrapeflow:scrapeflow@localhost:5432/scrapeflow_test
+      REDIS_URL: redis://localhost:6379/0
+      API_KEY_PEPPER: ci-only-api-key-pepper-not-a-production-secret
+      JWT_SECRET: ci-only-jwt-secret-not-for-production-use
+      WEBHOOK_SECRET_KEY: ci-only-webhook-secret-not-for-production
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -66,7 +79,7 @@ jobs:
           version: "0.13.6"
       - run: uv python install 3.12
       - run: uv sync --frozen --dev
-      - run: uv run pytest tests/integration -q
+      - run: uv run pytest tests/unit tests/integration --cov --cov-report=term-missing -q
 
   web:
     runs-on: ubuntu-24.04
