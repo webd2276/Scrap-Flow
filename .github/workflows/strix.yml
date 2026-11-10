@@ -1,0 +1,153 @@
+name: Strix pentest
+
+# Strix is an autonomous AI pentesting agent. It runs real exploit attempts, so
+# it is deliberately kept out of the pull-request gate: an LLM-keyed scan costs
+# money, takes minutes and produces findings that a human must triage.
+#
+# Trigger it by hand from the Actions tab. Uncomment the schedule once the team
+# has agreed on a budget and an owner for the findings.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target: repo path, URL, or API spec file"
+        required: true
+        default: "./scrapeflow"
+        type: string
+      scan_mode:
+        description: "Scan depth"
+        required: true
+        type: choice
+        options: [quick, standard, deep]
+        default: quick
+      scope_mode:
+        description: "Code scope: full for an audit, diff for a pull request"
+        required: true
+        type: choice
+        options: [full, diff]
+        default: full
+      fail_on:
+        description: "Minimum severity reported as a failing gate"
+        required: true
+        type: choice
+        options: [any, high, critical]
+        default: high
+      max_budget:
+        description: "LLM spend cap for the whole scan, in USD"
+        required: true
+        default: "10"
+        type: string
+  # schedule:
+  #   - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pentest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      STRIX_LLM: ${{ secrets.STRIX_LLM }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      SCAN_TARGET: ${{ inputs.target || './scrapeflow' }}
+      SCAN_MODE: ${{ inputs.scan_mode || 'quick' }}
+      SCOPE_MODE: ${{ inputs.scope_mode || 'full' }}
+      FAIL_ON: ${{ inputs.fail_on || 'high' }}
+      MAX_BUDGET: ${{ inputs.max_budget || '10' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Strix uses git history to resolve diff scope.
+          fetch-depth: 0
+
+      - name: Explain the skip when secrets are absent
+        if: env.LLM_API_KEY == '' || env.STRIX_LLM == ''
+        run: |
+          echo "::warning title=Strix secrets missing::Add repository secrets STRIX_LLM and LLM_API_KEY to enable the scan."
+          {
+            echo "### Strix scan skipped"
+            echo ""
+            echo "Configure the repository secrets \`STRIX_LLM\` and \`LLM_API_KEY\`, then re-run this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validate inputs
+        if: env.LLM_API_KEY != '' && env.STRIX_LLM != ''
+        run: |
+          if ! [[ "$MAX_BUDGET" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "::error title=Invalid budget::max_budget must be a number, got '$MAX_BUDGET'."
+            exit 1
+          fi
+
+      - name: Install uv
+        if: env.LLM_API_KEY != '' && env.STRIX_LLM != ''
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+          enable-cache: true
+
+      - name: Install Strix (pinned)
+        if: env.LLM_API_KEY != '' && env.STRIX_LLM != ''
+        run: |
+          uv tool install "strix-agent==1.7.0"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run pentest
+        if: env.LLM_API_KEY != '' && env.STRIX_LLM != ''
+        # Exit 1 is a fatal error and must fail the job. Exit 2 means findings:
+        # the report is uploaded either way, so this stays advisory by default.
+        run: |
+          fail_args=()
+          if [ "$FAIL_ON" != "any" ]; then
+            fail_args=(--fail-on "$FAIL_ON")
+          fi
+
+          set +e
+          strix -n \
+            --target "$SCAN_TARGET" \
+            --scan-mode "$SCAN_MODE" \
+            --scope-mode "$SCOPE_MODE" \
+            --max-budget "$MAX_BUDGET" \
+            --max-turns 300 \
+            "${fail_args[@]}"
+          code=$?
+          set -e
+
+          {
+            echo "### Strix pentest"
+            echo ""
+            echo "- target: \`$SCAN_TARGET\`"
+            echo "- scan mode: \`$SCAN_MODE\` · scope: \`$SCOPE_MODE\` · budget: \`\$$MAX_BUDGET\`"
+            echo "- exit code: \`$code\` (0 no findings, 1 fatal, 2 findings at or above \`$FAIL_ON\`)"
+            echo "- reports: \`strix_runs/\` artifact"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$code" -eq 1 ]; then
+            echo "::error title=Strix failed::The scan did not complete. Check the logs and the missing configuration."
+            exit 1
+          fi
+          if [ "$code" -eq 2 ]; then
+            echo "::warning title=Strix findings::The scan reported findings. Download the strix_runs artifact and triage them."
+          fi
+
+      - name: Record agent edits
+        if: always() && env.LLM_API_KEY != '' && env.STRIX_LLM != ''
+        # A local target is mounted writable, so the agent may have changed files.
+        run: |
+          mkdir -p strix_runs
+          git status --porcelain > strix_runs/agent-edits.status || true
+          git diff > strix_runs/agent-edits.diff || true
+
+      - name: Upload reports
+        if: always() && env.LLM_API_KEY != '' && env.STRIX_LLM != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-findings-${{ github.run_id }}
+          path: strix_runs/
+          if-no-files-found: warn
+          retention-days: 30

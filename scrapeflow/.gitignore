@@ -31,3 +31,6 @@ blob-report/
 pgdata/
 redisdata/
 .run/
+
+# Strix pentest runs
+strix_runs/

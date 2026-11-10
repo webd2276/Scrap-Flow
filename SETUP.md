@@ -535,6 +535,14 @@ STRIPE_PRICE_BUSINESS=
 a private network, set a random `METRICS_TOKEN`; requests must then send
 `Authorization: Bearer <token>`.
 
+### 7.7 Automated penetration testing (Strix)
+
+The repo ships an optional, advisory Strix integration: a manual GitHub Actions
+workflow and `scripts/security-scan.sh` for local source or live-API scans. It
+needs `STRIX_LLM` and `LLM_API_KEY` and is never part of the PR gate. Setup,
+budget caps, and the safety rules are in
+[`docs/security/strix.md`](docs/security/strix.md).
+
 ---
 
 ## 8. Local development without Docker
