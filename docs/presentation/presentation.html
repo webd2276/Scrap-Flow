@@ -1,0 +1,2189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ScrapeFlow — Project &amp; Technology Stack</title>
+<style>
+  :root {
+    --ink: #0f172a;
+    --muted: #52627a;
+    --soft: #7b8aa3;
+    --line: #e3e9f2;
+    --bg: #f7f9fc;
+    --card: #ffffff;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --cyan: #0891b2;
+    --cyan-soft: #e6f7fb;
+    --green: #047857;
+    --green-soft: #e8f7f0;
+    --amber: #b45309;
+    --amber-soft: #fdf3e3;
+    --red: #b91c1c;
+    --red-soft: #fdecec;
+    --dark: #0b1220;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #d7dde7; }
+  body {
+    font-family: Lato, "DejaVu Sans", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  @page { size: 1600px 900px; margin: 0; }
+
+  .slide {
+    position: relative;
+    width: 1600px;
+    height: 900px;
+    padding: 50px 64px 66px;
+    background: var(--bg);
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+
+  .slide.dark {
+    background:
+      radial-gradient(1100px 620px at 82% -10%, rgba(79,70,229,.40), transparent 62%),
+      radial-gradient(900px 520px at 6% 108%, rgba(8,145,178,.28), transparent 60%),
+      linear-gradient(145deg, #0b1220 0%, #0e1730 55%, #101c36 100%);
+    color: #e8eefb;
+  }
+  .slide.dark .muted { color: #9fb0cc; }
+  .slide.dark .dim { color: #8194b3; }
+  .slide.dark .card {
+    background: rgba(255,255,255,.055);
+    border-color: rgba(255,255,255,.13);
+  }
+  .slide.dark .card h3 { color: #f1f5ff; }
+  .slide.dark .card p, .slide.dark .card li { color: #b9c7df; }
+
+  .eyebrow {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 2.6px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 9px;
+  }
+  .slide.dark .eyebrow { color: #8fa6ff; }
+
+  h1 { font-size: 94px; line-height: .96; margin: 0; letter-spacing: -2.8px; font-weight: 900; }
+  h2.title { font-size: 44px; line-height: 1.1; margin: 0 0 8px; letter-spacing: -1.1px; font-weight: 900; }
+  .lead { font-size: 22px; line-height: 1.5; color: var(--muted); margin: 0; max-width: 1120px; }
+  .slide.dark .lead { color: #a9bad6; }
+
+  .footer {
+    position: absolute; left: 64px; right: 64px; bottom: 24px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; color: var(--soft); letter-spacing: .2px;
+  }
+  .slide.dark .footer { color: #7286a6; }
+  .footer .dot { color: var(--accent); font-weight: 900; }
+
+  .muted { color: var(--muted); }
+  .dim { color: var(--soft); }
+  .accent { color: var(--accent); }
+  .green { color: var(--green); }
+  .amber { color: var(--amber); }
+  .red { color: var(--red); }
+  .mono { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; }
+
+  /* layout helpers */
+  .grid { display: grid; gap: 18px; }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+  .g-32 { grid-template-columns: 1.15fr .85fr; }
+  .g-23 { grid-template-columns: .85fr 1.15fr; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .wrap { display: flex; flex-wrap: wrap; gap: 9px; }
+  .mt8 { margin-top: 8px; } .mt14 { margin-top: 14px; } .mt18 { margin-top: 18px; }
+  .mt24 { margin-top: 24px; } .mt30 { margin-top: 30px; } .mt40 { margin-top: 40px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .card.tight { padding: 18px 20px; border-radius: 14px; }
+  .card h3 { font-size: 19px; margin: 0 0 6px; font-weight: 800; letter-spacing: -.2px; }
+  .card p { font-size: 16px; line-height: 1.5; color: var(--muted); margin: 0; }
+  .card .big { font-size: 34px; font-weight: 900; letter-spacing: -1px; line-height: 1; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 12px; border-radius: 999px;
+    background: #fff; border: 1px solid var(--line);
+    font-size: 14px; font-weight: 700; color: #334155;
+    white-space: nowrap;
+  }
+  .slide.dark .chip { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); color: #dbe5f8; }
+  .chip.accent { background: var(--accent-soft); border-color: #d9dcff; color: #3730a3; }
+  .chip.green { background: var(--green-soft); border-color: #c7ecdc; color: #06684a; }
+  .chip.cyan { background: var(--cyan-soft); border-color: #c6ebf4; color: #075e74; }
+  .chip.amber { background: var(--amber-soft); border-color: #f3ddb8; color: #8a4708; }
+  .chip.red { background: var(--red-soft); border-color: #f6cdcd; color: #9c1616; }
+
+  .pill {
+    display: inline-block; padding: 3px 9px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+  }
+  .pill.ok { background: var(--green-soft); color: #05664a; }
+  .pill.warn { background: var(--amber-soft); color: #8a4708; }
+  .pill.bad { background: var(--red-soft); color: #9c1616; }
+  .pill.info { background: var(--accent-soft); color: #3730a3; }
+
+  ul.clean { margin: 6px 0 0; padding: 0; list-style: none; }
+  ul.clean li {
+    position: relative; padding-left: 21px; margin: 0 0 9px;
+    font-size: 16.5px; line-height: 1.45; color: var(--muted);
+  }
+  ul.clean li::before {
+    content: ""; position: absolute; left: 2px; top: 8px;
+    width: 6px; height: 6px; border-radius: 2px; background: var(--accent);
+  }
+  ul.clean li strong { color: var(--ink); font-weight: 800; }
+  .slide.dark ul.clean li strong { color: #f1f5ff; }
+
+  .tbl { width: 100%; border-collapse: collapse; font-size: 16px; }
+  .tbl th {
+    text-align: left; font-size: 11.5px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--soft); font-weight: 800; padding: 0 12px 9px; border-bottom: 1.5px solid var(--line);
+  }
+  .tbl td { padding: 10px 12px; border-bottom: 1px solid #edf1f7; vertical-align: top; color: #334155; }
+  .tbl tr:last-child td { border-bottom: 0; }
+  .tbl td.k { font-weight: 800; color: var(--ink); }
+  .tbl .mono { font-size: 13px; }
+  .slide.dark .tbl th { color: #7f92b1; border-color: rgba(255,255,255,.14); }
+  .slide.dark .tbl td { color: #c3d1e8; border-color: rgba(255,255,255,.08); }
+  .slide.dark .tbl td.k { color: #f1f5ff; }
+
+  pre.code {
+    margin: 0; background: #0b1220; color: #d7e2f5;
+    font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+    font-size: 14.5px; line-height: 1.55;
+    padding: 16px 18px; border-radius: 12px; overflow: hidden;
+    border: 1px solid #1c2a45;
+  }
+  pre.code .c { color: #6f86a8; }
+  pre.code .k { color: #93b4ff; }
+  pre.code .s { color: #7dd3a8; }
+  pre.code .n { color: #f0b472; }
+
+  .term { border-radius: 13px; overflow: hidden; border: 1px solid #1c2a45; background: #0b1220; }
+  .term .bar {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 14px; background: #111c33; border-bottom: 1px solid #1c2a45;
+  }
+  .term .bar i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+  .term .bar .r { background: #ff5f57; } .term .bar .y { background: #febc2e; } .term .bar .g { background: #28c840; }
+  .term .bar span { margin-left: 8px; font-size: 12px; color: #7f92b1; font-family: "DejaVu Sans Mono", monospace; }
+  .term pre {
+    margin: 0; padding: 14px 16px; color: #c8d6ee;
+    font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+    font-size: 14px; line-height: 1.5; overflow: hidden;
+  }
+  .term pre .p { color: #6ee7b7; }
+  .term pre .ok { color: #86efac; }
+  .term pre .warn { color: #fcd34d; }
+  .term pre .dim2 { color: #6f86a8; }
+
+  .shot {
+    border: 1px solid #d8e0ec; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 10px 30px rgba(15,23,42,.10); background: #fff;
+  }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot .cap {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 8px 12px; background: #fff; border-top: 1px solid #edf1f7;
+    font-size: 11.5px; color: var(--soft);
+  }
+
+  .kpi { display: flex; flex-direction: column; gap: 3px; }
+  .kpi .v { font-size: 46px; font-weight: 900; letter-spacing: -1.6px; line-height: 1; }
+  .kpi .l { font-size: 12.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--soft); font-weight: 800; }
+
+  .num {
+    width: 30px; height: 30px; border-radius: 9px; flex: 0 0 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 900;
+  }
+  .step { display: flex; gap: 13px; align-items: flex-start; }
+  .step .body { min-width: 0; }
+  .step h4 { margin: 1px 0 3px; font-size: 18px; font-weight: 800; }
+  .step p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--muted); }
+
+  .arch-box {
+    border-radius: 12px; padding: 11px 14px; background: #fff;
+    border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(15,23,42,.05);
+  }
+  .arch-box b { display: block; font-size: 15px; letter-spacing: -.1px; }
+  .arch-box small { display: block; font-size: 12.5px; color: var(--soft); margin-top: 2px; line-height: 1.35; }
+  .arch-box.acc { border-color: #c9ccff; background: #f4f5ff; }
+  .arch-box.cy { border-color: #bfe7f1; background: #f0fbfd; }
+  .arch-box.gr { border-color: #bfe8d6; background: #f1fbf6; }
+  .arch-box.am { border-color: #f0dcb9; background: #fdf8ef; }
+  .arrow-down { text-align: center; color: #9aa8c0; font-size: 17px; line-height: 1; }
+  .lane-label {
+    font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--soft); font-weight: 800; margin-bottom: 6px;
+  }
+
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .divider { height: 1px; background: var(--line); margin: 14px 0; }
+  .slide.dark .divider { background: rgba(255,255,255,.13); }
+
+  .quote {
+    border-left: 4px solid var(--accent); padding: 2px 0 2px 16px;
+    font-size: 16px; line-height: 1.5; color: var(--muted);
+  }
+  .slide.dark .quote { color: #a9bad6; }
+
+  .cover-meta { display: flex; gap: 34px; margin-top: 40px; }
+  .cover-meta div { font-size: 14px; }
+  .cover-meta .l { font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase; color: #6f86a8; font-weight: 800; margin-bottom: 4px; }
+  .cover-meta .v { color: #dbe5f8; font-weight: 700; }
+
+  .logotile {
+    width: 62px; height: 62px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 24px; color: #fff;
+    background: linear-gradient(140deg, #6366f1, #0891b2);
+    box-shadow: 0 10px 24px rgba(79,70,229,.28);
+  }
+  .mini-title { font-size: 11.5px; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 800; color: var(--soft); }
+
+  /* density variant for information-heavy slides */
+  .dense h2.title { font-size: 38px; }
+  .dense .lead { font-size: 19px; }
+  .dense .card p { font-size: 14px; }
+  .dense .card h3 { font-size: 17px; }
+  .dense ul.clean li { font-size: 14.5px; margin-bottom: 6px; }
+  .dense .tbl { font-size: 14px; }
+  .dense .tbl td { padding: 7px 10px; }
+  .dense pre.code { font-size: 12.5px; }
+  .dense .term pre { font-size: 12px; }
+  .dense .card.tight { padding: 14px 16px; }
+
+  .takeaway {
+    position: absolute; left: 64px; right: 64px; bottom: 62px;
+    display: flex; align-items: center; gap: 16px;
+    padding: 15px 22px; border-radius: 12px;
+    background: #ffffff; border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  }
+  .takeaway .lbl {
+    font-size: 10.5px; letter-spacing: 1.6px; text-transform: uppercase;
+    font-weight: 900; color: var(--accent); white-space: nowrap;
+  }
+  .takeaway p { margin: 0; font-size: 15.5px; line-height: 1.4; color: #334155; }
+  .slide.dark .takeaway { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); border-left-color: #8fa6ff; }
+  .slide.dark .takeaway p { color: #c3d1e8; }
+
+  .shot.crop img { height: 240px; object-fit: cover; object-position: top left; }
+
+  /* roomier reference table for the full-stack slide */
+  .tbl.tall { font-size: 16.5px; }
+  .tbl.tall td { padding: 15px 14px; }
+  .tbl.tall th { padding: 12px 14px; }
+</style>
+</head>
+<body>
+<!-- 01 COVER -->
+<section class="slide dark">
+  <div class="row" style="gap:14px">
+    <div class="logotile">SF</div>
+    <div>
+      <div style="font-size:13px;letter-spacing:2.4px;text-transform:uppercase;color:#8fa6ff;font-weight:800">Project Presentation · 2026</div>
+      <div style="font-size:13px;color:#7f92b1">Multi-tenant scraping &amp; browser automation platform</div>
+    </div>
+  </div>
+
+  <h1 style="margin-top:64px">Scrape<span style="color:#8fa6ff">Flow</span></h1>
+
+  <p class="lead" style="margin-top:18px;font-size:24px;max-width:1080px;color:#c6d4ea">
+    A complete, production-shaped web scraping API and dashboard — one durable job queue,
+    a real headless browser path, SSRF-safe egress, tenant isolation, and artifact storage.
+  </p>
+
+  <div class="wrap" style="margin-top:26px">
+    <span class="chip">Python 3.12</span>
+    <span class="chip">FastAPI</span>
+    <span class="chip">Celery + Redis</span>
+    <span class="chip">PostgreSQL 16</span>
+    <span class="chip">Selenium Grid</span>
+    <span class="chip">S3 artifacts</span>
+    <span class="chip">Next.js 16</span>
+    <span class="chip">React 19</span>
+    <span class="chip">TypeScript</span>
+  </div>
+
+  <div class="grid g4" style="margin-top:36px;max-width:1180px;gap:14px">
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">11</div><div class="l" style="color:#8fa6ff">Services in dev</div></div>
+    </div>
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">29</div><div class="l" style="color:#8fa6ff">API routes</div></div>
+    </div>
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">322</div><div class="l" style="color:#8fa6ff">Tests passing</div></div>
+    </div>
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">15</div><div class="l" style="color:#8fa6ff">DB models</div></div>
+    </div>
+  </div>
+
+  <div class="cover-meta" style="margin-top:52px">
+    <div><div class="l">Repository</div><div class="v">web-scrapping-tool / scrapeflow</div></div>
+    <div><div class="l">Base commit</div><div class="v mono">0c6d96c</div></div>
+    <div><div class="l">Evidence</div><div class="v">Live stack · real scrape · 322 tests</div></div>
+    <div><div class="l">Date</div><div class="v">10 November 2026</div></div>
+  </div>
+
+  <div style="position:absolute;right:64px;bottom:70px;text-align:right">
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6f86a8;font-weight:800">Live demo recorded on</div>
+    <div style="font-size:15px;color:#dbe5f8;margin-top:4px">Docker Compose · 11 services · healthy</div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> ScrapeFlow · Full Project &amp; Technology Stack</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 02 AGENDA -->
+<section class="slide">
+  <p class="eyebrow">Agenda</p>
+  <h2 class="title">What this deck covers</h2>
+  <p class="lead">Product → architecture → every technology choice, point by point → live artifacts → quality and honest limits.</p>
+
+  <div class="grid g4 mt30" style="gap:16px">
+    <div class="card tight">
+      <div class="num" style="background:#4f46e5">01</div>
+      <h3 style="margin-top:12px">Problem &amp; solution</h3>
+      <p>Why scraping at scale is hard, and the product that answers it.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#0891b2">02</div>
+      <h3 style="margin-top:12px">Architecture</h3>
+      <p>Control plane, workers, data stores and the request lifecycle.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#7c3aed">03</div>
+      <h3 style="margin-top:12px">Languages &amp; package managers</h3>
+      <p>Python 3.12 + <span class="mono">uv</span>; TypeScript + <span class="mono">npm</span>. Why each was chosen.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#059669">04</div>
+      <h3 style="margin-top:12px">Backend libraries</h3>
+      <p>FastAPI, SQLAlchemy, Celery, Selenium, boto3, security and ops.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#d97706">05</div>
+      <h3 style="margin-top:12px">Frontend libraries</h3>
+      <p>Next.js 16, React 19, Tailwind 4, the BFF pattern and tooling.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#4f46e5">06</div>
+      <h3 style="margin-top:12px">Live artifacts</h3>
+      <p>Dashboard screenshots, a real job, screenshot, HTML and JSON.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#0891b2">07</div>
+      <h3 style="margin-top:12px">Infrastructure &amp; quality</h3>
+      <p>Docker topology, cross-platform runners, test and lint gates.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#b91c1c">08</div>
+      <h3 style="margin-top:12px">Verified vs unverified</h3>
+      <p>Exactly what was proven locally, and what needs external services.</p>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The deck follows the order of a code review: what it does, how it is wired, which library does what, then the evidence.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Agenda</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 03 PROBLEM -->
+<section class="slide">
+  <p class="eyebrow">The problem</p>
+  <h2 class="title">Scraping at scale is not a <span class="mono" style="font-size:34px">requests.get()</span></h2>
+  <p class="lead">A single script works once. A platform has to survive concurrency, hostile pages, tenants, and audits.</p>
+
+  <div class="grid g4 mt30" style="gap:16px">
+    <div class="card">
+      <span class="pill bad">Reality 01</span>
+      <h3 style="margin-top:12px">Modern pages need a real browser</h3>
+      <p>Client-side rendering, lazy images, cookie walls and bot checks mean raw HTML is often empty. Chrome must be pooled, timeboxed and reaped.</p>
+    </div>
+    <div class="card">
+      <span class="pill bad">Reality 02</span>
+      <h3 style="margin-top:12px">Long jobs cannot live in a request</h3>
+      <p>A 60-second browser run would block an HTTP worker. Work must be queued durably, retried, cancellable, and observable from outside the request.</p>
+    </div>
+    <div class="card">
+      <span class="pill bad">Reality 03</span>
+      <h3 style="margin-top:12px">User-supplied URLs are an attack surface</h3>
+      <p>Without validation, <span class="mono">http://169.254.169.254</span> or <span class="mono">localhost</span> turns a scraper into an internal network scanner. DNS rebinding defeats naive checks.</p>
+    </div>
+    <div class="card">
+      <span class="pill bad">Reality 04</span>
+      <h3 style="margin-top:12px">Multi-tenancy is not optional</h3>
+      <p>Every job, key, artifact, schedule and webhook must be scoped to an organisation, with roles, quotas, rate limits and an audit trail.</p>
+    </div>
+  </div>
+
+  <div class="grid g2 mt18" style="gap:16px">
+    <div class="card tight" style="border-left:4px solid #4f46e5">
+      <p style="font-size:15px"><strong style="color:#0f172a">Implicit requirements:</strong> artifact storage with hashes and expiry, idempotent submissions, structured logs with correlation IDs, metrics an operator can alert on, and a UI that does not leak tokens.</p>
+    </div>
+    <div class="card tight" style="border-left:4px solid #0891b2">
+      <p style="font-size:15px"><strong style="color:#0f172a">Implicit constraints:</strong> the API process must never launch Chrome; workers may crash mid-job; storage may be MinIO, S3 or a mock; the same compose file should run on Linux, macOS and Windows.</p>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The hard part is never the HTTP fetch — it is isolation, durability, safety and accounting around it.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Problem statement</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 04 SOLUTION -->
+<section class="slide">
+  <p class="eyebrow">The solution</p>
+  <h2 class="title">One control plane. One queue. One dashboard.</h2>
+  <p class="lead">ScrapeFlow accepts a job over HTTP, returns <span class="mono">202 Accepted</span> immediately, and does the slow work in isolated workers.</p>
+
+  <div class="grid g-32 mt24" style="gap:24px;align-items:start">
+    <div>
+      <div class="card tight" style="padding:16px 18px">
+        <h3>What a user gets</h3>
+        <ul class="clean" style="margin-top:8px">
+          <li><strong>Scrape API</strong> — URL, CSS/XPath selectors, page text, links, meta, screenshots, HTML capture.</li>
+          <li><strong>Browser automation</strong> — a typed step DSL: goto, click, type, wait, extract, screenshot.</li>
+          <li><strong>Schedules</strong> — cron expressions, run history, manual trigger.</li>
+          <li><strong>Artifacts</strong> — presigned downloads for screenshot, HTML and JSON, with SHA-256 and expiry.</li>
+          <li><strong>Webhooks</strong> — signed deliveries with a durable outbox and retries.</li>
+          <li><strong>Billing</strong> — Stripe checkout/portal plus a credit ledger and plan quotas.</li>
+        </ul>
+      </div>
+      <div class="row mt14" style="gap:8px;flex-wrap:wrap">
+        <span class="chip accent">202 async jobs</span>
+        <span class="chip cyan">SSRF-safe egress</span>
+        <span class="chip green">JWT + hashed API keys</span>
+        <span class="chip amber">Prometheus metrics</span>
+      </div>
+    </div>
+
+    <div class="shot">
+      <img src="assets/04-jobs.png" alt="ScrapeFlow jobs dashboard with a succeeded scrape job" />
+      <div class="cap"><span>Live dashboard · <span class="mono">/jobs</span></span><span>real job · 7.4 s</span></div>
+    </div>
+  </div>
+
+  <div class="grid g3 mt18" style="gap:14px">
+    <div class="card tight"><div class="kpi"><span class="v accent">4</span><span class="l">Plans: free → business</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v accent">15</span><span class="l">SQLAlchemy models</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v accent">29</span><span class="l">HTTP routes in OpenAPI</span></div></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Product overview</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 05 FEATURE MAP -->
+<section class="slide">
+  <p class="eyebrow">Capability map</p>
+  <h2 class="title">Everything the platform ships</h2>
+  <p class="lead">Each box is implemented in the repository and mapped to a module, not a roadmap promise.</p>
+
+  <div class="grid g4 mt24" style="gap:14px">
+    <div class="card tight">
+      <span class="pill info">Ingest</span>
+      <h3 style="margin-top:9px">Scrape jobs</h3>
+      <p>HTTP fetch or real browser. Named selectors, extraction limits, redirects, timeout, idempotency key.</p>
+      <div class="mini-title" style="margin-top:9px">apps/api/routers/scrape.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Automate</span>
+      <h3 style="margin-top:9px">Step workflows</h3>
+      <p>Typed actions with limits per plan, browser-only execution, optional screenshots per step.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/automate.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Operate</span>
+      <h3 style="margin-top:9px">Durable jobs</h3>
+      <p>Queued → running → terminal states, events, cancellation, retries, hard timeout + reaper.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/tasks/jobs.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Store</span>
+      <h3 style="margin-top:9px">Artifacts</h3>
+      <p>S3-compatible upload, SHA-256, content type, retention by plan, presigned download URLs.</p>
+      <div class="mini-title" style="margin-top:9px">packages/core/artifacts.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Repeat</span>
+      <h3 style="margin-top:9px">Schedules</h3>
+      <p>Cron validation via croniter, per-run history, Celery Beat dispatch, manual run endpoint.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/tasks/schedules.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Notify</span>
+      <h3 style="margin-top:9px">Signed webhooks</h3>
+      <p>HMAC signatures, encrypted endpoint secrets, outbox delivery and retry tracking.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/webhooks.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Govern</span>
+      <h3 style="margin-top:9px">Tenancy &amp; quota</h3>
+      <p>Organisations, memberships, roles, scoped API keys, credit ledger, concurrency limits.</p>
+      <div class="mini-title" style="margin-top:9px">packages/core/quota.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Observe</span>
+      <h3 style="margin-top:9px">Ops surface</h3>
+      <p>JSON logs with request/job IDs, Prometheus metrics, Sentry, <span class="mono">/health</span> and <span class="mono">/ready</span>.</p>
+      <div class="mini-title" style="margin-top:9px">packages/core/observability.py</div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Every capability on this slide maps to a module path, so a claim can be checked against code in one step.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Feature map</span><span class="pagenum"></span></div>
+</section>
+<!-- 06 ARCHITECTURE -->
+<section class="slide">
+  <p class="eyebrow">Architecture</p>
+  <h2 class="title">Control plane and execution plane are deliberately separate</h2>
+
+  <div style="margin-top:20px">
+    <div class="lane-label">1 · Clients</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box" style="width:330px"><b>Next.js dashboard</b><small>Browser · React 19 · same-origin BFF</small></div>
+      <div class="arch-box" style="width:330px"><b>API consumers</b><small>curl · SDK · CI pipelines · JWT or API key</small></div>
+      <div class="arch-box" style="width:330px"><b>Cron schedules</b><small>Celery Beat fires due schedules</small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">2 · Edge &amp; control plane</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box cy" style="width:420px"><b>Next.js route handlers (BFF)</b><small>/api/auth/* · /api/proxy/[...path] · refresh cookie stays httpOnly</small></div>
+      <div class="arch-box acc" style="width:470px"><b>FastAPI ASGI application</b><small>auth · RBAC · quota · jobs API · artifacts · webhooks · metrics — <u>never launches Chrome</u></small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">3 · Durable state</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box gr" style="width:300px"><b>PostgreSQL 16</b><small>orgs, users, jobs, events, artifacts, ledger, schedules</small></div>
+      <div class="arch-box am" style="width:300px"><b>Redis 7</b><small>Celery broker · token buckets · idempotency · locks</small></div>
+      <div class="arch-box cy" style="width:300px"><b>S3-compatible storage</b><small>screenshots · HTML · JSON · presigned downloads</small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">4 · Async execution</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box acc" style="width:420px"><b>Celery worker (prefork)</b><small>scrape · automation · webhooks · retention · reaper · reconcile</small></div>
+      <div class="arch-box" style="width:400px"><b>Celery Beat</b><small>croniter schedules · periodic maintenance</small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">5 · Egress</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box" style="width:300px"><b>httpx + parsel</b><small>fast HTTP fetch · CSS/XPath extraction</small></div>
+      <div class="arch-box" style="width:300px"><b>Selenium Grid</b><small>standalone-chrome 4.25 · screenshots · JS pages</small></div>
+      <div class="arch-box am" style="width:300px"><b>Validating egress proxy</b><small>resolves, validates, pins IP · denies private ranges</small></div>
+    </div>
+  </div>
+
+  <div class="row mt18" style="gap:14px">
+    <div class="card tight" style="flex:1"><p style="font-size:13.5px"><strong style="color:#0f172a">Why split:</strong> an HTTP request can return in milliseconds while a 60-second browser job runs elsewhere. API restarts never kill running scrapes.</p></div>
+    <div class="card tight" style="flex:1"><p style="font-size:13.5px"><strong style="color:#0f172a">Why proxy-only egress:</strong> DNS is resolved and checked at connect time, then the validated IP is pinned — closing the rebinding window.</p></div>
+    <div class="card tight" style="flex:1"><p style="font-size:13.5px"><strong style="color:#0f172a">Production:</strong> the same topology sits behind Caddy 2.8 with automatic TLS in <span class="mono">deploy/compose.prod.yml</span>.</p></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> System architecture</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 07 REQUEST LIFECYCLE -->
+<section class="slide">
+  <p class="eyebrow">End-to-end flow</p>
+  <h2 class="title">What happens when a user submits a scrape</h2>
+  <p class="lead">The real job used throughout this deck: <span class="mono" style="font-size:15px">POST /v1/scrape</span> → <span class="mono" style="font-size:15px">quotes.toscrape.com</span>, <span class="mono" style="font-size:15px">render_js=true</span>, screenshot + HTML.</p>
+
+  <div class="grid g2 mt24" style="gap:22px">
+    <div class="grid" style="gap:13px">
+      <div class="step"><span class="num">1</span><div class="body"><h4>Authenticate &amp; authorize</h4><p>JWT bearer or hashed API key → membership → role → required scope (<span class="mono">scrape:write</span>). Audit log written.</p></div></div>
+      <div class="step"><span class="num">2</span><div class="body"><h4>Validate the payload</h4><p>Pydantic v2 schema: absolute http(s) URL, selector map, timeout bounds, extraction limits, plan caps.</p></div></div>
+      <div class="step"><span class="num">3</span><div class="body"><h4>SSRF pre-check &amp; quota reserve</h4><p>URL validated against the SSRF policy; credits reserved in the usage ledger; rate-limit bucket consumed atomically in Redis.</p></div></div>
+      <div class="step"><span class="num">4</span><div class="body"><h4>Persist and enqueue</h4><p>Job row committed as <span class="pill info">queued</span>; Celery task published; API returns <span class="mono">202</span> with the job id and a dedup flag.</p></div></div>
+      <div class="step"><span class="num">5</span><div class="body"><h4>Execute in the worker</h4><p>httpx fetch or Selenium Grid browser run through the validating egress proxy. Hard timeout is enforced.</p></div></div>
+    </div>
+
+    <div class="grid" style="gap:13px">
+      <div class="step"><span class="num" style="background:#0891b2">6</span><div class="body"><h4>Extract</h4><p>parsel applies CSS/XPath selectors, page text, links and meta limits; the payload is normalised to JSON.</p></div></div>
+      <div class="step"><span class="num" style="background:#0891b2">7</span><div class="body"><h4>Store artifacts</h4><p>screenshot.png, page.html and result.json uploaded through boto3, hashed with SHA-256 and given a retention expiry.</p></div></div>
+      <div class="step"><span class="num" style="background:#0891b2">8</span><div class="body"><h4>Finalise</h4><p>Job marked <span class="pill ok">succeeded</span> with duration; events appended; webhook delivery queued in the outbox.</p></div></div>
+      <div class="step"><span class="num" style="background:#0891b2">9</span><div class="body"><h4>Consume</h4><p>The dashboard polls <span class="mono">/v1/jobs/{id}</span> every 5 s; artifacts download through short-lived presigned URLs.</p></div></div>
+
+      <div class="term mt8">
+        <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>observed timeline</span></div>
+        <pre><span class="dim2">$</span> curl -X POST /v1/scrape ...
+<span class="ok">202</span> {"job":{"status":"queued", ...}}
+
+<span class="dim2">poll 1</span>  <span class="ok">succeeded</span>   duration_ms: <span class="p">7406</span>
+<span class="dim2">result.title</span>       "Quotes to Scrape"
+<span class="dim2">artifacts</span>          result.json · page.html · screenshot.png</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The API only validates, records and enqueues. Everything slow and failure-prone happens outside the request.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Request lifecycle</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 08 STACK AT A GLANCE -->
+<section class="slide">
+  <p class="eyebrow">Stack at a glance</p>
+  <h2 class="title">Every layer, language and tool</h2>
+
+  <table class="tbl tall mt18">
+    <thead>
+      <tr><th style="width:15%">Layer</th><th style="width:12%">Language</th><th style="width:30%">Technology</th><th style="width:16%">Version</th><th>Role</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="k">API control plane</td><td>Python</td><td>FastAPI · Starlette · Uvicorn</td><td class="mono">0.162 · 1.10 · 0.32</td><td>ASGI HTTP API, DI, OpenAPI, async jobs</td></tr>
+      <tr><td class="k">Validation &amp; config</td><td>Python</td><td>Pydantic v2 · pydantic-settings</td><td class="mono">2.9+ · 2.5+</td><td>Typed request/response models, env settings</td></tr>
+      <tr><td class="k">Persistence</td><td>SQL</td><td>SQLAlchemy 2 async · asyncpg · Alembic · PostgreSQL</td><td class="mono">2.0 · 0.30 · 1.14 · 16</td><td>ORM, async driver, migrations, relational truth</td></tr>
+      <tr><td class="k">Job queue</td><td>Python</td><td>Celery[redis] · redis-py · croniter</td><td class="mono">5.4 · 5.2 · 3.0</td><td>Durable workers, broker, cron schedules</td></tr>
+      <tr><td class="k">Scraping engine</td><td>Python</td><td>httpx · parsel · Selenium</td><td class="mono">0.27 · 1.9 · 4.25</td><td>HTTP fetch, CSS/XPath, real browser</td></tr>
+      <tr><td class="k">Artifacts</td><td>Python</td><td>boto3 · S3 API (MinIO / s3mock)</td><td class="mono">1.35+</td><td>Uploads, SHA-256, presigned downloads</td></tr>
+      <tr><td class="k">Security</td><td>Python</td><td>PyJWT · argon2-cffi · cryptography</td><td class="mono">2.9 · 23.1 · 50</td><td>Tokens, password hashing, secret encryption</td></tr>
+      <tr><td class="k">Observability</td><td>Python</td><td>structlog · prometheus-client · sentry-sdk</td><td class="mono">24.4 · 0.20 · 2.14</td><td>JSON logs, metrics, error reporting</td></tr>
+      <tr><td class="k">Dashboard</td><td>TypeScript</td><td>Next.js · React · Tailwind CSS</td><td class="mono">16.4.5 · 19.3.1 · 4.3.4</td><td>App Router UI, BFF, styling</td></tr>
+      <tr><td class="k">Frontend tooling</td><td>TypeScript / JS</td><td>ESLint · Vitest · Playwright · Vite</td><td class="mono">9.39 · 5.1 · 1.65 · 8.3</td><td>Lint, unit tests, E2E, test runner core</td></tr>
+      <tr><td class="k">Runtime &amp; infra</td><td>YAML / HCL-free</td><td>Docker Compose v2 · Caddy · Bash · PowerShell</td><td class="mono">v2 · 2.8 · 3.2+ / 5.1+</td><td>Local + prod topology, TLS, one-command runners</td></tr>
+    </tbody>
+  </table>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>One row per layer. If a library is not on this slide, it is not in the runtime dependency list.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Technology stack</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 09 LANGUAGES -->
+<section class="slide">
+  <p class="eyebrow">Languages</p>
+  <h2 class="title">Python for the engine, TypeScript for the cockpit</h2>
+  <p class="lead">Deliberate split: heavy I/O and scraping live in Python; the UI and BFF share one typed language.</p>
+
+  <div class="grid g3 mt24" style="gap:18px">
+    <div class="card">
+      <div class="row"><span class="pill info">Backend</span><span class="mini-title">14,098 LOC · 95 files</span></div>
+      <h3 style="margin-top:10px;font-size:22px">Python 3.12</h3>
+      <p style="margin-top:4px">Pinned to <span class="mono">>=3.12,&lt;3.13</span> in <span class="mono">pyproject.toml</span>.</p>
+      <ul class="clean" style="margin-top:10px">
+        <li><strong>Async first:</strong> native <span class="mono">async/await</span> for FastAPI, asyncpg and httpx.</li>
+        <li><strong>Ecosystem:</strong> Selenium, parsel, boto3, Celery are mature here.</li>
+        <li><strong>Typing:</strong> full annotations checked by mypy in strict-ish mode.</li>
+        <li><strong>Performance:</strong> I/O-bound work, so the GIL is not the bottleneck.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="pill info">Frontend</span><span class="mini-title">5,477 LOC · TS/TSX</span></div>
+      <h3 style="margin-top:10px;font-size:22px">TypeScript 5.9</h3>
+      <p style="margin-top:4px">Strict config, <span class="mono">noEmit</span> typecheck in CI.</p>
+      <ul class="clean" style="margin-top:10px">
+        <li><strong>Contracts:</strong> job, artifact, schedule and webhook types mirror the API.</li>
+        <li><strong>Safety:</strong> discriminated unions for job status and automation steps.</li>
+        <li><strong>Ergonomics:</strong> same language in React components and server route handlers.</li>
+        <li><strong>Compile-time only:</strong> no runtime overhead in the browser.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="pill info">Supporting</span><span class="mini-title">glue &amp; infrastructure</span></div>
+      <h3 style="margin-top:10px;font-size:22px">SQL · YAML · Bash · PowerShell</h3>
+      <ul class="clean" style="margin-top:10px">
+        <li><strong>SQL:</strong> Alembic migrations and PostgreSQL DDL; indexes and constraints do real work.</li>
+        <li><strong>YAML:</strong> Compose dev/prod topology, CI workflow, alert rules.</li>
+        <li><strong>Bash 3.2+:</strong> <span class="mono">run.sh</span> + <span class="mono">run-macos.sh</span> for Linux/macOS.</li>
+        <li><strong>PowerShell 5.1+:</strong> <span class="mono">run.ps1</span> + <span class="mono">run.cmd</span> for native Windows.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g4 mt18" style="gap:14px">
+    <div class="card tight"><div class="kpi"><span class="v">3.12</span><span class="l">Python, pinned minor</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">5.9</span><span class="l">TypeScript</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">2</span><span class="l">Languages in app code</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">100%</span><span class="l">Type-annotated app code</span></div></div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Two application languages, one rule: typed at the boundary, tested at the edge.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Language choices</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 10 PACKAGE MANAGERS -->
+<section class="slide">
+  <p class="eyebrow">Package managers</p>
+  <h2 class="title"><span class="mono">uv</span> on the backend, <span class="mono">npm</span> on the frontend</h2>
+  <p class="lead">Both lock the full dependency graph. Neither relies on a globally installed toolchain.</p>
+
+  <div class="grid g2 mt22" style="gap:20px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="font-size:21px;margin:0"><span class="mono">uv</span> — Python</h3><span class="chip accent">backend</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>One tool:</strong> resolves, installs, locks and runs — replaces pip, pip-tools, virtualenv and tox.</li>
+        <li><strong>Reproducible:</strong> <span class="mono">uv.lock</span> pins every transitive package with hashes.</li>
+        <li><strong>Version pin:</strong> <span class="mono">requires-python = ">=3.12,&lt;3.13"</span>; <span class="mono">.python-version</span> keeps machines aligned.</li>
+        <li><strong>Dependency groups:</strong> the app, <span class="mono">dev</span> (pytest, ruff, mypy, respx, pip-audit) and <span class="mono">e2e</span> (locust) install independently.</li>
+        <li><strong>Same in Docker:</strong> images use <span class="mono">uv sync --frozen</span>, so local and container builds match.</li>
+      </ul>
+      <pre class="code mt14"><span class="c"># everyday commands</span>
+uv sync                    <span class="c"># install exactly the lockfile</span>
+uv run pytest -q           <span class="c"># run inside the project env</span>
+uv run ruff check apps packages tests
+uv add <span class="s">"httpx"</span>             <span class="c"># update pyproject + lock</span></pre>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="font-size:21px;margin:0"><span class="mono">npm</span> — Node.js</h3><span class="chip cyan">frontend</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Bundled with Node 22:</strong> no extra version manager needed to start.</li>
+        <li><strong>Lockfile:</strong> <span class="mono">package-lock.json</span> pins the tree; <span class="mono">npm ci</span> is used for clean installs.</li>
+        <li><strong>Scripts as interface:</strong> <span class="mono">dev</span>, <span class="mono">build</span>, <span class="mono">start</span>, <span class="mono">lint</span>, <span class="mono">typecheck</span>, <span class="mono">test</span>, <span class="mono">e2e</span>.</li>
+        <li><strong>Exact versions:</strong> no <span class="mono">^</span> ranges for the app runtime — Next, React and tooling are pinned.</li>
+        <li><strong>Docker:</strong> the web image builds with the same lockfile and runs <span class="mono">node server.js</span>.</li>
+      </ul>
+      <pre class="code mt14"><span class="c"># scripts in apps/web/package.json</span>
+npm ci
+npm run lint
+npm run typecheck
+npm test        <span class="c"># vitest run</span>
+npm run build   <span class="c"># next build</span></pre>
+    </div>
+  </div>
+
+  <div class="grid g4 mt16" style="gap:12px">
+    <div class="card tight"><div class="mini-title">Python lock</div><div class="mono" style="font-size:14px;margin-top:4px">uv.lock</div></div>
+    <div class="card tight"><div class="mini-title">Node lock</div><div class="mono" style="font-size:14px;margin-top:4px">package-lock.json</div></div>
+    <div class="card tight"><div class="mini-title">Service images</div><div class="mono" style="font-size:14px;margin-top:4px">postgres:16 · redis:7</div></div>
+    <div class="card tight"><div class="mini-title">Browser image</div><div class="mono" style="font-size:14px;margin-top:4px">standalone-chrome:4.25</div></div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Lockfiles are committed. A fresh clone resolves to the exact versions that passed the gates.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Package management</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 11 BACKEND MAP -->
+<section class="slide">
+  <p class="eyebrow">Backend libraries</p>
+  <h2 class="title">The Python stack, group by group</h2>
+  <p class="lead">Declared in <span class="mono">scrapeflow/pyproject.toml</span>; every group below is exercised by the test suite.</p>
+
+  <div class="grid g4 mt20" style="gap:13px">
+    <div class="card tight">
+      <div class="mini-title">HTTP / API</div>
+      <h3 style="margin-top:6px">Web layer</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">fastapi<br>starlette<br>uvicorn[standard]</p>
+      <p style="margin-top:6px">Routing, DI, ASGI serving, request lifecycle.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Validation</div>
+      <h3 style="margin-top:6px">Schemas</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">pydantic&gt;=2.9<br>pydantic-settings<br>email-validator</p>
+      <p style="margin-top:6px">Request/response models, env config, email types.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Data</div>
+      <h3 style="margin-top:6px">Persistence</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">sqlalchemy[asyncio]<br>asyncpg<br>alembic</p>
+      <p style="margin-top:6px">ORM, async PostgreSQL driver, versioned migrations.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Queue</div>
+      <h3 style="margin-top:6px">Async work</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">celery[redis]<br>redis&gt;=5.2<br>croniter</p>
+      <p style="margin-top:6px">Workers, broker/client, cron expression evaluation.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Scraping</div>
+      <h3 style="margin-top:6px">Fetch &amp; parse</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">httpx<br>parsel<br>selenium</p>
+      <p style="margin-top:6px">HTTP client, CSS/XPath engine, WebDriver protocol.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Storage</div>
+      <h3 style="margin-top:6px">Artifacts</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">boto3&gt;=1.35</p>
+      <p style="margin-top:6px">S3 uploads, metadata, presigned URL generation.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Security</div>
+      <h3 style="margin-top:6px">Identity</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">PyJWT<br>argon2-cffi<br>cryptography</p>
+      <p style="margin-top:6px">Signed tokens, password hashing, encrypted secrets.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Ops</div>
+      <h3 style="margin-top:6px">Observability</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">structlog<br>prometheus-client<br>sentry-sdk[fastapi]</p>
+      <p style="margin-top:6px">Structured logs, metrics registry, exception capture.</p>
+    </div>
+  </div>
+
+  <div class="grid g3 mt16" style="gap:13px">
+    <div class="card tight" style="border-left:4px solid #4f46e5">
+      <p style="font-size:13.5px"><strong style="color:#0f172a">Billing:</strong> <span class="mono">stripe&gt;=11,&lt;15</span> for checkout sessions, the customer portal and signed webhook events.</p>
+    </div>
+    <div class="card tight" style="border-left:4px solid #0891b2">
+      <p style="font-size:13.5px"><strong style="color:#0f172a">Test-only:</strong> pytest 9, pytest-asyncio, pytest-cov, respx, ruff, mypy, pip-audit, locust (e2e group).</p>
+    </div>
+    <div class="card tight" style="border-left:4px solid #059669">
+      <p style="font-size:13.5px"><strong style="color:#0f172a">Guardrail:</strong> <span class="mono">pip-audit</span> scans the resolved lock for known CVEs; mypy checks 94 source files.</p>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Eight groups, one responsibility each — no library is present for decoration.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Backend stack map</span><span class="pagenum"></span></div>
+</section>
+<!-- 12 WEB FRAMEWORK -->
+<section class="slide">
+  <p class="eyebrow">Backend · web layer</p>
+  <h2 class="title">FastAPI, Starlette, Uvicorn, Pydantic</h2>
+  <p class="lead">Four libraries with four distinct jobs. Each one is replaceable in theory and load-bearing in practice.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div class="grid" style="gap:13px">
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">FastAPI <span class="mono dim" style="font-size:12px">0.162</span></h3><span class="chip accent">the API surface</span></div>
+        <ul class="clean" style="margin-top:8px">
+          <li><strong>Routers per resource:</strong> auth, scrape, automate, jobs, keys, schedules, webhooks, billing, exports, metrics, health.</li>
+          <li><strong>Dependency injection:</strong> <span class="mono">Depends()</span> resolves the DB session, current principal, org and required scope.</li>
+          <li><strong>Async endpoints:</strong> all I/O is awaited; long work is offloaded, never awaited in-request.</li>
+          <li><strong>Contract generation:</strong> <span class="mono">response_model</span> produces the OpenAPI schema served at <span class="mono">/docs</span>.</li>
+        </ul>
+      </div>
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Starlette <span class="mono dim" style="font-size:12px">1.10</span></h3><span class="chip cyan">the foundation</span></div>
+        <p style="margin-top:7px">ASGI toolkit underneath FastAPI. Used directly for the <span class="mono">RequestContextMiddleware</span> that accepts a safe <span class="mono">X-Request-ID</span>, binds it to logs, and rejects unsafe values.</p>
+      </div>
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Uvicorn <span class="mono dim" style="font-size:12px">0.32 [standard]</span></h3><span class="chip green">the server</span></div>
+        <p style="margin-top:7px">Runs the ASGI app on port 8000 inside the container. <span class="mono">[standard]</span> adds uvloop and httptools for throughput; health probes hit <span class="mono">/health</span> and <span class="mono">/ready</span>.</p>
+      </div>
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Pydantic v2 <span class="mono dim" style="font-size:12px">2.9+</span></h3><span class="chip amber">the contract</span></div>
+        <p style="margin-top:7px">Rust-backed validation and serialisation. <span class="mono">pydantic-settings</span> loads <span class="mono">.env</span> into a typed <span class="mono">Settings</span> object at startup, so a bad secret fails fast.</p>
+      </div>
+    </div>
+
+    <div>
+      <pre class="code" style="font-size:12.5px"><span class="c"># apps/api/routers/scrape.py — shape (simplified)</span>
+<span class="k">@router</span>.post(
+    <span class="s">""</span>,
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+<span class="k">async def</span> create_scrape(
+    payload: ScrapeRequest,
+    principal: Principal = Depends(require_scope(<span class="s">"scrape:write"</span>)),
+    session: AsyncSession = Depends(get_session),
+    idempotency_key: str | <span class="k">None</span> = Header(<span class="k">None</span>, alias=<span class="s">"Idempotency-Key"</span>),
+) -> JobAccepted:
+    <span class="c"># validate → quota → persist queued job → enqueue</span>
+    job = <span class="k">await</span> dispatch.create_job(...)
+    <span class="k">return</span> JobAccepted(job=job, deduplicated=<span class="k">False</span>)</pre>
+
+      <div class="card tight mt14">
+        <div class="mini-title">Why this combination</div>
+        <ul class="clean" style="margin-top:7px">
+          <li><strong>OpenAPI for free:</strong> 29 documented routes become a browsable, testable contract.</li>
+          <li><strong>One validation layer:</strong> the same Pydantic models guard HTTP input and serialise output.</li>
+          <li><strong>Typed settings:</strong> missing <span class="mono">DATABASE_URL</span> is a startup error, not a 3 a.m. surprise.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Web framework</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 13 DATA LAYER -->
+<section class="slide">
+  <p class="eyebrow">Backend · persistence</p>
+  <h2 class="title">SQLAlchemy async, asyncpg, Alembic, PostgreSQL 16</h2>
+  <p class="lead">PostgreSQL is the source of truth. Redis is a cache and a queue — never the record of what happened.</p>
+
+  <div class="grid g-23 mt20" style="gap:22px;align-items:start">
+    <div class="grid" style="gap:12px">
+      <div class="card tight">
+        <h3>SQLAlchemy 2.0 (async)</h3>
+        <p><span class="mono">AsyncSession</span> per request, declarative models, typed <span class="mono">select()</span>. Relationships and constraints live in the model layer, not in ad-hoc SQL.</p>
+      </div>
+      <div class="card tight">
+        <h3>asyncpg 0.30</h3>
+        <p>The actual PostgreSQL driver. Binary protocol, prepared statements, no psycopg overhead. URL form: <span class="mono">postgresql+asyncpg://…</span>.</p>
+      </div>
+      <div class="card tight">
+        <h3>Alembic 1.14</h3>
+        <p>Five versioned migrations run by the <span class="mono">migrate</span> compose service before the API starts. <span class="mono">alembic current</span> / <span class="mono">heads</span> are documented runbook commands.</p>
+      </div>
+      <div class="card tight">
+        <h3>Pooling fix that matters</h3>
+        <p>Celery tasks create and destroy an event loop per job. Reusing a pooled asyncpg connection across loops caused <span class="mono">Future attached to a different loop</span>; workers now use <span class="mono">NullPool</span> and a regression test runs the reaper across two loops.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="mini-title">15 mapped tables</div>
+      <div class="grid g2" style="gap:9px;margin-top:8px">
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">organizations</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">users</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">memberships</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">api_keys</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">refresh_tokens</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">audit_logs</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#c9ccff;background:#f4f5ff"><div class="mono" style="font-size:13px">jobs</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#c9ccff;background:#f4f5ff"><div class="mono" style="font-size:13px">job_events</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#c9ccff;background:#f4f5ff"><div class="mono" style="font-size:13px">artifacts</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">schedules</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">schedule_runs</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">webhook_endpoints</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">webhook_deliveries</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#f0dcb9;background:#fdf8ef"><div class="mono" style="font-size:13px">usage_ledger</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#f0dcb9;background:#fdf8ef"><div class="mono" style="font-size:13px">stripe_events</div></div>
+        <div class="card tight" style="padding:10px 13px;display:flex;align-items:center"><span class="dim" style="font-size:12px">+ enums &amp; indexes</span></div>
+      </div>
+      <div class="card tight mt12" style="background:#0b1220;border-color:#1c2a45">
+        <div class="mini-title" style="color:#7f92b1">state machine stored on jobs</div>
+        <div class="mono" style="font-size:12.5px;color:#c8d6ee;margin-top:6px;line-height:1.7">
+          queued → running → <span style="color:#86efac">succeeded</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘ <span style="color:#fca5a5">failed</span> · <span style="color:#fcd34d">timed_out</span> · cancelled
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>PostgreSQL is the record of what happened. Redis may lose data without rewriting history.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Persistence layer</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 14 ASYNC JOBS -->
+<section class="slide">
+  <p class="eyebrow">Backend · async work</p>
+  <h2 class="title">Celery, Redis, Beat and croniter</h2>
+  <p class="lead">The API answers in milliseconds; workers do the slow, failure-prone part with retries and a hard deadline.</p>
+
+  <div class="grid g3 mt22" style="gap:18px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Celery 5.4</h3><span class="chip accent">worker</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Prefork pool:</strong> isolation from crashes and blocking Selenium calls.</li>
+        <li><strong>Retries:</strong> <span class="mono">max_attempts=2</span> recorded on the job row.</li>
+        <li><strong>Task families:</strong> jobs, reaper, reconcile, retention, schedules, webhooks, health.</li>
+        <li><strong>Multiprocess metrics:</strong> prefork counters aggregated through <span class="mono">PROMETHEUS_MULTIPROC_DIR</span> on port 9101.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Redis 7</h3><span class="chip amber">broker + state</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Broker:</strong> Celery task transport with append-only persistence enabled.</li>
+        <li><strong>Token bucket:</strong> atomic Lua script per key/org — no race between read and write.</li>
+        <li><strong>Idempotency:</strong> <span class="mono">Idempotency-Key</span> replays the original job instead of double-charging.</li>
+        <li><strong>Locks &amp; counters:</strong> short-lived coordination that is safe to lose.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Beat + croniter</h3><span class="chip cyan">time</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Beat scheduler:</strong> separate container, schedule file on a tmpfs.</li>
+        <li><strong>croniter 3.0:</strong> validates cron expressions and computes the next fire time.</li>
+        <li><strong>Run history:</strong> every fire creates a <span class="mono">schedule_runs</span> row with a terminal status.</li>
+        <li><strong>Manual trigger:</strong> <span class="mono">POST /v1/schedules/{id}/run</span> for testing.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g-32 mt18" style="gap:20px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>worker + beat (live stack)</span></div>
+      <pre><span class="dim2">$</span> docker compose ps --format <span class="s">'{{.Service}}  {{.Status}}'</span>
+api           Up (healthy)
+worker        Up
+beat          Up
+redis         Up (healthy)
+postgres      Up (healthy)
+
+<span class="dim2"># Celery Beat schedules due work every minute;</span>
+<span class="dim2"># the reaper closes orphaned browser sessions and hard-times-out jobs.</span>
+<span class="ok">[tasks]</span> jobs · reaper · reconcile · retention · schedules · webhooks</pre>
+    </div>
+    <div>
+      <div class="card tight">
+        <h3>Failure handling, explicitly</h3>
+        <ul class="clean" style="margin-top:8px">
+          <li><strong>Hard timeout:</strong> a job cannot run forever; it moves to <span class="mono">timed_out</span>.</li>
+          <li><strong>Reaper:</strong> scheduled task kills orphan browser sessions and reconciles stuck rows.</li>
+          <li><strong>Reconcile:</strong> compares broker and database state after a crash.</li>
+          <li><strong>Retention:</strong> expires artifacts according to the plan's retention days.</li>
+          <li><strong>Webhook outbox:</strong> deliveries survive a worker restart and retry with backoff.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Async execution</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 15 SCRAPING -->
+<section class="slide">
+  <p class="eyebrow">Backend · scraping engine</p>
+  <h2 class="title">httpx for speed, Selenium for truth, parsel for shape</h2>
+  <p class="lead">Two execution paths behind one contract, both forced through the same validating egress proxy.</p>
+
+  <div class="grid g3 mt22" style="gap:18px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">httpx 0.27</h3><span class="chip green">fast path</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>Async HTTP client with explicit timeouts and redirect limits.</li>
+        <li>Used when <span class="mono">render_js=false</span>; typically a fraction of a browser run.</li>
+        <li>Custom headers, user agent, proxy routing via the egress proxy.</li>
+        <li>Response status, final URL and redirect chain are recorded in the result.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Selenium 4.25</h3><span class="chip accent">browser path</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>Remote WebDriver against <span class="mono">standalone-chrome:4.25.0</span> in Selenium Grid.</li>
+        <li>Waits for a selector, captures screenshots and HTML.</li>
+        <li>Powers the automation step DSL: goto, click, type, wait, extract, screenshot.</li>
+        <li>Sessions are bounded and reaped; the API container never launches Chrome.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">parsel 1.9</h3><span class="chip cyan">extraction</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>CSS and XPath selectors over the fetched HTML.</li>
+        <li>Attribute extraction, multi-match lists, named result fields.</li>
+        <li>Page text, links and meta tags with hard limits.</li>
+        <li>Result is normalised to plain JSON for storage and export.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g-32 mt18" style="gap:20px;align-items:start">
+    <div class="card tight">
+      <div class="mini-title">SSRF defence in depth</div>
+      <ul class="clean" style="margin-top:7px">
+        <li><strong>Policy layer:</strong> scheme allow-list, port rules, private/link-local/loopback denial at request time.</li>
+        <li><strong>Validating proxy:</strong> resolves DNS, checks every address, then connects to the pinned IP — not the hostname.</li>
+        <li><strong>Chained upstreams:</strong> optional commercial proxies sit <em>behind</em> the validator, never around it.</li>
+      </ul>
+    </div>
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>real selector result</span></div>
+      <pre><span class="dim2">$</span> jq <span class="s">'.selectors'</span> result.json
+{
+  <span class="p">"author"</span>: <span class="s">"Albert Einstein"</span>,
+  <span class="p">"first_quote"</span>: <span class="s">"“The world as we have created it is a
+   process of our thinking. It cannot be changed
+   without changing our thinking.”"</span>
+}</pre>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Two engines, one contract: the caller gets the same result shape whether or not JavaScript was required.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Scraping engine</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 16 ARTIFACTS -->
+<section class="slide">
+  <p class="eyebrow">Backend · object storage</p>
+  <h2 class="title">Artifacts: boto3 over an S3-compatible API</h2>
+  <p class="lead">Screenshots and HTML are too large for a database row and too useful to lose. They live in object storage, addressed by row metadata.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div class="grid" style="gap:13px">
+      <div class="card tight">
+        <h3>boto3 1.35+</h3>
+        <p>Single S3 client configured by <span class="mono">ARTIFACTS_ENDPOINT</span>, bucket and credentials. Works against MinIO, AWS S3, or <span class="mono">adobe/s3mock</span> locally.</p>
+      </div>
+      <div class="card tight">
+        <h3>Write path</h3>
+        <p>Worker uploads <span class="mono">screenshot.png</span>, <span class="mono">page.html</span> and <span class="mono">result.json</span>, computes SHA-256, then inserts an <span class="mono">artifacts</span> row with content type, size and <span class="mono">expires_at</span>.</p>
+      </div>
+      <div class="card tight">
+        <h3>Read path</h3>
+        <p><span class="mono">GET /v1/artifacts/{id}/download</span> authorises the caller, then redirects to a short-lived presigned URL. The browser never sees storage credentials.</p>
+      </div>
+      <div class="card tight">
+        <h3>Retention</h3>
+        <p>Plan-dependent: 1 day on Free, 7 Starter, 30 Pro, 90 Business. The retention task deletes expired objects and rows.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="mini-title">Real artifacts from job <span class="mono">d59d6ef5…</span></div>
+      <table class="tbl" style="margin-top:8px">
+        <thead><tr><th>Kind</th><th>File</th><th>Size</th><th>SHA-256 (prefix)</th></tr></thead>
+        <tbody>
+          <tr><td class="k">result</td><td class="mono">result.json</td><td class="mono">2.1 KB</td><td class="mono">27906a08a7cf…</td></tr>
+          <tr><td class="k">html</td><td class="mono">page.html</td><td class="mono">11 KB</td><td class="mono">47c8812e633f…</td></tr>
+          <tr><td class="k">screenshot</td><td class="mono">screenshot.png</td><td class="mono">84 KB</td><td class="mono">54ebbeb9b150…</td></tr>
+        </tbody>
+      </table>
+
+      <div class="card tight mt14" style="background:#0b1220;border-color:#1c2a45">
+        <div class="mini-title" style="color:#7f92b1">download_url returned by the API</div>
+        <div class="mono" style="font-size:12.5px;color:#c8d6ee;margin-top:7px;line-height:1.6">
+          <span style="color:#93b4ff">/v1/artifacts</span>/2b6284ac-…/download<br>
+          <span style="color:#6f86a8">→ 307 redirect → presigned S3 URL</span>
+        </div>
+      </div>
+
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <p style="font-size:13px"><strong style="color:#0f172a">Local note:</strong> the pinned MinIO tag returned <span class="mono">401</span> from its registry in this environment, so the verified run used <span class="mono">adobe/s3mock</span>. The S3 code path and presigned redirects are identical; the official MinIO image/lifecycle remains unverified.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The database stores metadata, object storage stores bytes, and the API stores neither.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Artifact storage</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 17 SECURITY -->
+<section class="slide">
+  <p class="eyebrow">Backend · security</p>
+  <h2 class="title">Identity, secrets and egress are separate defences</h2>
+
+  <div class="grid g4 mt20" style="gap:14px">
+    <div class="card tight">
+      <span class="pill info">Authentication</span>
+      <h3 style="margin-top:9px">PyJWT 2.9</h3>
+      <p>Short-lived access tokens signed HS256; claims carry user, org and role. Refresh tokens rotate and are stored hashed.</p>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Passwords</span>
+      <h3 style="margin-top:9px">argon2-cffi</h3>
+      <p>Argon2id hashing with per-password salt. No plaintext, no reversible storage, constant-time verification.</p>
+    </div>
+    <div class="card tight">
+      <span class="pill info">API keys</span>
+      <h3 style="margin-top:9px">Pepper + SHA-256</h3>
+      <p>Keys are shown once. Only a hash with a server-side pepper is stored, so a database leak alone cannot replay them.</p>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Secrets at rest</span>
+      <h3 style="margin-top:9px">cryptography 50</h3>
+      <p>Webhook signing secrets and proxy credentials are encrypted with Fernet before they reach PostgreSQL.</p>
+    </div>
+  </div>
+
+  <div class="grid g3 mt16" style="gap:14px">
+    <div class="card tight">
+      <h3>Authorisation</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li><strong>Roles:</strong> owner, admin, member.</li>
+        <li><strong>Scopes:</strong> <span class="mono">scrape:write</span>, <span class="mono">automation:write</span>, <span class="mono">jobs:read</span>, <span class="mono">schedules:write</span>, <span class="mono">exports:read</span>, <span class="mono">keys:manage</span>, <span class="mono">billing:manage</span>, <span class="mono">audit:read</span>.</li>
+        <li><strong>Enforcement:</strong> a dependency resolves the required scope before the handler runs.</li>
+        <li><strong>Audit:</strong> sensitive actions append to <span class="mono">audit_logs</span>.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>Session model</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>Access token kept <strong>in memory</strong> in the dashboard.</li>
+        <li>Refresh token in an <strong>httpOnly, same-site cookie</strong>.</li>
+        <li>Rotation on refresh; logout revokes the stored token.</li>
+        <li>No tokens in <span class="mono">localStorage</span>; the BFF keeps the browser same-origin.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>Egress control</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>Private, loopback, link-local and metadata ranges denied.</li>
+        <li>DNS resolved and validated at connect time.</li>
+        <li>Validated IP pinned to close rebinding.</li>
+        <li>Header and byte caps; hop-by-hop headers stripped.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card tight mt14" style="border-left:4px solid #4f46e5">
+    <p style="font-size:14px"><strong style="color:#0f172a">PII and logging:</strong> Sentry initialises with <span class="mono">send_default_pii=False</span>; structured logs carry identifiers, not secrets. <span class="mono">/metrics</span> can be disabled or protected with <span class="mono">METRICS_TOKEN</span>.</p>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Compromise one layer and the next still holds: hashed credentials, scoped tokens, validated egress.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Security model</span><span class="pagenum"></span></div>
+</section>
+<!-- 18 TENANCY / QUOTA / BILLING -->
+<section class="slide">
+  <p class="eyebrow">Backend · commercial layer</p>
+  <h2 class="title">Tenancy, quotas, plans and Stripe</h2>
+  <p class="lead">Isolation is structural: every query is scoped by organisation, and every job is priced before it runs.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div>
+      <div class="grid g2" style="gap:13px">
+        <div class="card tight">
+          <h3>Organisation scope</h3>
+          <p><span class="mono">organizations</span> own users through <span class="mono">memberships</span>, and own jobs, keys, schedules, webhooks, artifacts and ledger rows.</p>
+        </div>
+        <div class="card tight">
+          <h3>Plan catalog is code</h3>
+          <p>Plans are frozen dataclasses in <span class="mono">packages/core/plans.py</span> — not editable database rows. A billing change is a reviewed code change with tests.</p>
+        </div>
+        <div class="card tight">
+          <h3>Credit weights</h3>
+          <p>base 1 · browser +1 · screenshot +1 · proxy 2 · each extra page +1 · each started 10 automation steps +1.</p>
+        </div>
+        <div class="card tight">
+          <h3>Usage ledger</h3>
+          <p>Reserve → settle → release. A failed job does not silently consume credits; balances are reconstructable from rows.</p>
+        </div>
+      </div>
+
+      <table class="tbl mt14">
+        <thead><tr><th>Plan</th><th>Credits / mo</th><th>Concurrency</th><th>Steps</th><th>Pages</th><th>Retention</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Free</td><td class="mono">100</td><td class="mono">1</td><td class="mono">10</td><td class="mono">5</td><td class="mono">1 day</td></tr>
+          <tr><td class="k">Starter</td><td class="mono">5,000</td><td class="mono">3</td><td class="mono">50</td><td class="mono">25</td><td class="mono">7 days</td></tr>
+          <tr><td class="k">Pro</td><td class="mono">50,000</td><td class="mono">10</td><td class="mono">100</td><td class="mono">100</td><td class="mono">30 days</td></tr>
+          <tr><td class="k">Business</td><td class="mono">250,000</td><td class="mono">25</td><td class="mono">200</td><td class="mono">500</td><td class="mono">90 days</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Stripe <span class="mono dim" style="font-size:12px">stripe 11–15</span></h3><span class="chip accent">billing</span></div>
+        <div class="divider"></div>
+        <ul class="clean">
+          <li><strong>Checkout:</strong> <span class="mono">POST /v1/billing/checkout</span> creates a subscription session.</li>
+          <li><strong>Portal:</strong> <span class="mono">POST /v1/billing/portal</span> hands plan changes and invoices to Stripe.</li>
+          <li><strong>Webhook:</strong> <span class="mono">POST /v1/billing/webhook</span> verifies the signature and records the event id in <span class="mono">stripe_events</span> for idempotency.</li>
+          <li><strong>Plans endpoint:</strong> <span class="mono">GET /v1/billing/plans</span> and <span class="mono">/v1/billing/usage</span> drive the dashboard.</li>
+        </ul>
+      </div>
+
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <div class="mini-title">Verification status</div>
+        <p style="margin-top:6px;font-size:13.5px">The integration code and webhook idempotency are implemented and unit-tested. <strong style="color:#0f172a">Live Stripe checkout was not executed</strong> — no API keys or test account were available. It is listed as an unverified external path, not as working revenue.</p>
+      </div>
+
+      <div class="card tight mt12">
+        <div class="mini-title">Rate limiting</div>
+        <p style="margin-top:6px;font-size:13.5px">Atomic Redis token bucket with Lua: capacity, refill rate and cost are arguments, and the script returns allowed / remaining / retry-after / reset. Response headers make throttling visible to clients.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Pricing lives in code, usage lives in rows, and limits are enforced before work starts.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Tenancy, quota and billing</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 19 OBSERVABILITY -->
+<section class="slide">
+  <p class="eyebrow">Backend · observability</p>
+  <h2 class="title">Logs you can join, metrics you can alert on</h2>
+  <p class="lead">Phase 9 added correlation, metrics and error reporting; the evidence below is from the running stack, not a mock.</p>
+
+  <div class="grid g3 mt20" style="gap:16px">
+    <div class="card tight">
+      <h3>structlog 24.4</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>JSON logs with <span class="mono">request_id</span> on every API line.</li>
+        <li>Worker logs bind <span class="mono">job_id</span> for the whole task.</li>
+        <li><span class="mono">X-Request-ID</span> accepted only when safe, generated otherwise.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>prometheus-client 0.20</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>HTTP counters/histograms by route template — no cardinality explosion.</li>
+        <li>Queue depth, browser sessions, webhook backlog, DB and Redis latency.</li>
+        <li><span class="mono">/metrics</span> excluded from its own counters; worker prefork aggregation on 9101.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>sentry-sdk 2.14</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>FastAPI integration for unhandled exceptions.</li>
+        <li><span class="mono">send_default_pii=False</span> by design.</li>
+        <li>Optional DSN: absent means disabled, not crashing.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g-32 mt16" style="gap:20px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>GET /metrics · live</span></div>
+      <pre><span class="dim2">$</span> curl -s 127.0.0.1:8000/metrics | grep <span class="s">'^scrapeflow_'</span>
+<span class="dim2"># method label trimmed to fit the slide</span>
+scrapeflow_http_requests_total{route=<span class="s">"/health"</span>,status=<span class="s">"200"</span>} <span class="p">82.0</span>
+scrapeflow_http_requests_total{route=<span class="s">"/v1/scrape"</span>,status=<span class="s">"202"</span>} <span class="p">1.0</span>
+scrapeflow_http_requests_total{route=<span class="s">"/v1/jobs/{job_id}"</span>,status=<span class="s">"200"</span>} <span class="p">3.0</span>
+scrapeflow_http_requests_total{route=<span class="s">"/v1/artifacts/{id}/download"</span>,status=<span class="s">"307"</span>} <span class="p">5.0</span>
+
+<span class="dim2">$</span> curl -s 127.0.0.1:8000/ready
+{<span class="s">"status"</span>:<span class="s">"ready"</span>,<span class="s">"checks"</span>:{<span class="s">"postgres"</span>:{<span class="s">"status"</span>:<span class="s">"ok"</span>},<span class="s">"redis"</span>:{<span class="s">"status"</span>:<span class="s">"ok"</span>}}}</pre>
+    </div>
+
+    <div class="grid" style="gap:12px">
+      <div class="card tight">
+        <div class="mini-title">Probes</div>
+        <p style="margin-top:5px;font-size:13.5px"><span class="mono">/health</span> is liveness (process up). <span class="mono">/ready</span> checks PostgreSQL and Redis and returns <span class="mono">503</span> when either fails — that is what Compose and Caddy should gate on.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Alerting assets</div>
+        <p style="margin-top:5px;font-size:13.5px">Prometheus scrape config, alert rules and a Grafana dashboard are committed and configuration-validated. Prometheus/Grafana themselves were not started in this environment.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Capacity honesty</div>
+        <p style="margin-top:5px;font-size:13.5px">A Locust profile exists and its shape is unit-tested, but <strong style="color:#0f172a">Locust is not installed here</strong>. No throughput number is claimed; the 3 skipped tests record that gap.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>If a job cannot be explained from logs, metrics and events, it is not operable.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Observability</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 20 FRONTEND MAP -->
+<section class="slide">
+  <p class="eyebrow">Frontend libraries</p>
+  <h2 class="title">Next.js 16, React 19, TypeScript, Tailwind 4</h2>
+  <p class="lead">A deliberately small dependency surface: three runtime packages, and everything else is tooling.</p>
+
+  <div class="grid g-32 mt20" style="gap:20px;align-items:start">
+    <div class="grid g2" style="gap:13px">
+      <div class="card tight">
+        <div class="mini-title">Framework</div>
+        <h3 style="margin-top:5px">Next.js 16.4.5</h3>
+        <p>App Router, server route handlers for the BFF, file-based pages, production build with <span class="mono">next build</span>.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">UI runtime</div>
+        <h3 style="margin-top:5px">React 19.3.1</h3>
+        <p>Client components for interactive forms and polling; server components for page shells. <span class="mono">react-dom</span> pinned to the same version.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Language</div>
+        <h3 style="margin-top:5px">TypeScript 5.9.3</h3>
+        <p>Strict checking via <span class="mono">next typegen &amp;&amp; tsc --noEmit</span>. API types live in <span class="mono">lib/types.ts</span>.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Styling</div>
+        <h3 style="margin-top:5px">Tailwind CSS 4.3.4</h3>
+        <p>PostCSS plugin, utility classes in components, no runtime CSS-in-JS. Design tokens are Tailwind's palette plus a small set of shared primitives.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Tooling (devDependencies)</div>
+        <table class="tbl" style="margin-top:8px">
+          <tbody>
+            <tr><td class="k">ESLint</td><td class="mono">9.39.5</td><td>flat config + <span class="mono">eslint-config-next</span></td></tr>
+            <tr><td class="k">Vitest</td><td class="mono">5.1.0</td><td>unit tests for pure UI logic</td></tr>
+            <tr><td class="k">Vite</td><td class="mono">8.3.6</td><td>transform engine behind Vitest</td></tr>
+            <tr><td class="k">Playwright</td><td class="mono">1.65.0</td><td>browser E2E + PDF rendering</td></tr>
+            <tr><td class="k">TypeScript</td><td class="mono">5.9.3</td><td>typecheck</td></tr>
+            <tr><td class="k">PostCSS plugin</td><td class="mono">4.3.4</td><td>Tailwind pipeline</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card tight mt12">
+        <div class="mini-title">Runtime dependencies</div>
+        <div class="row mt8" style="gap:8px;flex-wrap:wrap">
+          <span class="chip accent">next 16.4.5</span>
+          <span class="chip accent">react 19.3.1</span>
+          <span class="chip accent">react-dom 19.3.1</span>
+        </div>
+        <p style="margin-top:9px;font-size:13.5px">No state library, no fetch wrapper library, no component kit. Auth state is a React context; HTTP is a small typed <span class="mono">request()</span> helper; UI primitives are local.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g4 mt16" style="gap:12px">
+    <div class="card tight"><div class="kpi"><span class="v">3</span><span class="l">Runtime packages</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">9</span><span class="l">Top-level routes</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">30</span><span class="l">Vitest tests</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">7</span><span class="l">Playwright specs run</span></div></div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Three runtime packages. Every other name on this slide is a build-time tool.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Frontend stack map</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 21 NEXT.JS / BFF -->
+<section class="slide">
+  <p class="eyebrow">Frontend · architecture</p>
+  <h2 class="title">The dashboard talks to a same-origin BFF, not to the API</h2>
+  <p class="lead">One origin in the browser solves CORS, cookie policy and token exposure at the same time.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div>
+      <div class="mini-title">Server route handlers</div>
+      <table class="tbl" style="margin-top:8px">
+        <tbody>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/signup</td><td>creates org + owner, sets refresh cookie</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/login</td><td>credentials → access token + cookie</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/refresh</td><td>rotates refresh token, returns access token</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/logout</td><td>revokes and clears the cookie</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/proxy/[...path]</td><td>authorised pass-through to FastAPI</td></tr>
+        </tbody>
+      </table>
+
+      <div class="card tight mt14">
+        <h3>Browser routes</h3>
+        <div class="row mt8" style="gap:7px;flex-wrap:wrap">
+          <span class="chip">/login</span><span class="chip">/signup</span><span class="chip">/jobs</span><span class="chip">/jobs/[id]</span><span class="chip">/scrape</span><span class="chip">/automate</span><span class="chip">/schedules</span><span class="chip">/keys</span><span class="chip">/billing</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Why a BFF</div>
+        <ul class="clean" style="margin-top:7px">
+          <li><strong>Token safety:</strong> the refresh token lives in an httpOnly cookie the JavaScript cannot read.</li>
+          <li><strong>No CORS:</strong> the browser only ever calls its own origin.</li>
+          <li><strong>In-memory access token:</strong> a hard refresh calls <span class="mono">/api/auth/refresh</span> and restores the session.</li>
+          <li><strong>One place to change:</strong> upstream API URL is server configuration, not a client constant.</li>
+        </ul>
+      </div>
+
+      <pre class="code mt12" style="font-size:12.5px"><span class="c">// conceptual flow</span>
+Browser  ──fetch──▶  Next.js /api/proxy/*
+                         │  attaches access token
+                         ▼
+                     FastAPI /v1/*
+                         │  JSON + status
+                         ▼
+Browser  ◀── same-origin response</pre>
+
+      <div class="card tight mt12" style="border-left:4px solid #0891b2">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Trade-off:</strong> every API call takes one extra hop. In exchange, the app has no CORS configuration, no token in web storage, and a single auditable boundary.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The browser never holds a long-lived credential — and never needs a CORS configuration.</p></div>
+  <div class="footer"><span><span class="dot">●</span> BFF architecture</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 22 UI SYSTEM -->
+<section class="slide">
+  <p class="eyebrow">Frontend · UI system</p>
+  <h2 class="title">Tailwind utilities plus a small local component kit</h2>
+  <p class="lead">No design-system dependency. Nine primitives and four editors cover every screen in the product.</p>
+
+  <div class="grid g2 mt20" style="gap:20px;align-items:start">
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Primitives · <span class="mono">components/ui.tsx</span></div>
+        <div class="row mt8" style="gap:7px;flex-wrap:wrap">
+          <span class="chip">Card</span><span class="chip">CardHeader</span><span class="chip">Button</span><span class="chip">Input</span><span class="chip">Select</span><span class="chip">Field</span><span class="chip">Badge</span><span class="chip">Alert</span><span class="chip">Spinner</span><span class="chip">EmptyState</span><span class="chip">CopyButton</span>
+        </div>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Composite editors</div>
+        <ul class="clean" style="margin-top:7px">
+          <li><strong>SelectorEditor:</strong> name + CSS/XPath + optional attribute + multi-match.</li>
+          <li><strong>KeyValueEditor:</strong> arbitrary request headers as rows.</li>
+          <li><strong>ExtractOptionsEditor:</strong> title, text, links, meta and hard limits.</li>
+          <li><strong>Automation step builder:</strong> typed actions with per-action defaults.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Feedback patterns</div>
+        <p style="margin-top:6px;font-size:13.5px">Inline errors from <span class="mono">ApiError</span>, optimistic disabled states while submitting, skeletons/spinners for polling pages, and empty states that explain the next action.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="shot">
+        <img src="assets/05-scrape-form.png" alt="Scrape form with live request preview" />
+        <div class="cap"><span>Live request preview updates as you type</span><span><span class="mono">POST /v1/scrape</span></span></div>
+      </div>
+      <div class="grid g2 mt12" style="gap:12px">
+        <div class="card tight"><div class="mini-title">Styling</div><p style="margin-top:5px;font-size:13px">Tailwind 4 utility classes, no CSS-in-JS runtime, consistent slate/indigo palette.</p></div>
+        <div class="card tight"><div class="mini-title">Accessibility</div><p style="margin-top:5px;font-size:13px">Labels bound to inputs, real buttons, visible focus states, semantic headings.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> UI component system</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 23 FRONTEND TOOLING -->
+<section class="slide">
+  <p class="eyebrow">Frontend · quality tooling</p>
+  <h2 class="title">Lint, typecheck, unit test, build, then E2E</h2>
+  <p class="lead">Five gates, all runnable from <span class="mono">apps/web</span> with npm scripts. The same commands run in CI.</p>
+
+  <div class="grid g-32 mt20" style="gap:20px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>apps/web · verified gates</span></div>
+      <pre><span class="dim2">$</span> npm run lint
+<span class="ok">✔</span> eslint .  <span class="dim2">no errors</span>
+
+<span class="dim2">$</span> npm run typecheck
+<span class="ok">✔</span> next typegen &amp;&amp; tsc --noEmit
+
+<span class="dim2">$</span> npm test
+<span class="ok">✔</span> 30 tests passed  <span class="dim2">(3 files)</span>
+
+<span class="dim2">$</span> npm run build
+<span class="ok">✔</span> compiled successfully
+<span class="ok">✔</span> route table generated
+
+<span class="dim2">$</span> npm run e2e
+<span class="ok">✔</span> 5 passed · 2 skipped  <span class="dim2">(Chromium)</span></pre>
+    </div>
+
+    <div class="grid" style="gap:12px">
+      <div class="card tight">
+        <h3>ESLint 9.39</h3>
+        <p>Flat config with <span class="mono">eslint-config-next</span>; catches React hook mistakes and Next-specific pitfalls.</p>
+      </div>
+      <div class="card tight">
+        <h3>Vitest 5.1</h3>
+        <p>Pure-logic tests for formatting, safe downloads and automation payload building — fast, no browser needed.</p>
+      </div>
+      <div class="card tight">
+        <h3>Playwright 1.65</h3>
+        <p>The journey spec drives signup → scrape → artifacts in Chromium. The two skips are environment-gated browser paths.</p>
+      </div>
+      <div class="card tight">
+        <h3>next build</h3>
+        <p>Production compile catches server/client boundary errors that typecheck alone cannot. The web image runs the built output.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Fast unit tests for logic, one real browser journey for the wiring, a production build for the boundary.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Frontend quality gates</span><span class="pagenum"></span></div>
+</section>
+<!-- 24 AUTH SCREENS -->
+<section class="slide">
+  <p class="eyebrow">Live dashboard · onboarding</p>
+  <h2 class="title">Sign-up creates an organisation; sign-in restores a session</h2>
+  <p class="lead">Captured from the running stack at <span class="mono">127.0.0.1:3000</span>, against real PostgreSQL and Redis.</p>
+
+  <div class="grid g2 mt22" style="gap:22px;align-items:start">
+    <div>
+      <div class="shot">
+        <img src="assets/01-login.png" alt="ScrapeFlow sign in page" />
+        <div class="cap"><span><span class="mono">/login</span></span><span>email · password · optional org slug</span></div>
+      </div>
+      <div class="card tight mt12">
+        <ul class="clean" style="margin:0">
+          <li><strong>Org slug is optional:</strong> only needed when one identity belongs to more than one organisation.</li>
+          <li><strong>No token in storage:</strong> the refresh cookie is set by the server route handler.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="shot">
+        <img src="assets/02-signup.png" alt="ScrapeFlow sign up page" />
+        <div class="cap"><span><span class="mono">/signup</span></span><span>creates org + owner + free plan</span></div>
+      </div>
+      <div class="card tight mt12">
+        <ul class="clean" style="margin:0">
+          <li><strong>Tos gate:</strong> the request carries <span class="mono">tos_accepted: true</span> and the API validates it.</li>
+          <li><strong>Owner role:</strong> the first user gets the owner membership and the free plan with 100 credits.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Onboarding screens</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 25 JOBS + SCRAPE -->
+<section class="slide">
+  <p class="eyebrow">Live dashboard · daily use</p>
+  <h2 class="title">The job list and the scrape builder</h2>
+  <p class="lead">One real succeeded job is visible: <span class="mono">quotes.toscrape.com</span>, 7.4 seconds, screenshot and HTML requested.</p>
+
+  <div class="grid g2 mt20" style="gap:20px;align-items:start">
+    <div>
+      <div class="shot">
+        <img src="assets/04-jobs.png" alt="Jobs list" />
+        <div class="cap"><span><span class="mono">/jobs</span> · active jobs refresh every 5 s</span><span>1–1 of 1</span></div>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">What the list exposes</div>
+        <p style="margin-top:6px;font-size:13.5px">Status badge, kind, URL, created time, duration and short job id. Filters by status, pagination, and quick actions to start a new scrape or automation.</p>
+      </div>
+    </div>
+    <div>
+      <div class="shot">
+        <img src="assets/06-automate.png" alt="Automation builder" />
+        <div class="cap"><span><span class="mono">/automate</span> · typed step builder</span><span>browser-only</span></div>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">The scrape builder, by contrast</div>
+        <p style="margin-top:6px;font-size:13.5px">The scrape form is declarative: URL, selectors, extraction options, screenshot/HTML flags, proxy country, timeout and webhook — with a live JSON preview of the exact request body.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Dashboard · jobs and automation</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 26 SECONDARY SCREENS -->
+<section class="slide">
+  <p class="eyebrow">Live dashboard · operations</p>
+  <h2 class="title">Schedules, API keys and billing</h2>
+  <p class="lead">Four more screens, captured from the same session. Each is wired to real endpoints, not static mock data.</p>
+
+  <div class="grid g2 mt18" style="gap:16px">
+    <div class="shot crop">
+      <img src="assets/07-schedules.png" alt="Schedules page" />
+      <div class="cap"><span><span class="mono">/schedules</span> · cron + run history</span><span>croniter validated</span></div>
+    </div>
+    <div class="shot crop">
+      <img src="assets/08-api-keys.png" alt="API keys page" />
+      <div class="cap"><span><span class="mono">/keys</span> · scopes + one-time reveal</span><span>hashed at rest</span></div>
+    </div>
+  </div>
+
+  <div class="grid g2 mt14" style="gap:16px">
+    <div class="shot crop">
+      <img src="assets/09-billing.png" alt="Billing page" />
+      <div class="cap"><span><span class="mono">/billing</span> · plans + usage</span><span>Stripe integration (unverified live)</span></div>
+    </div>
+    <div class="card">
+      <h3>What each screen proves</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li><strong>Schedules:</strong> cron expressions are validated server-side and every fire is recorded.</li>
+        <li><strong>API keys:</strong> scoped keys are created once and stored hashed; the secret is never shown again.</li>
+        <li><strong>Billing:</strong> plan catalog, credit balance and usage are read from the API; checkout requires live Stripe keys.</li>
+        <li><strong>Consistency:</strong> all four share the same shell, auth context and error handling.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Schedules, keys and billing are first-class screens, not settings hidden in a menu.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Dashboard · operations</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 27 JOB DETAIL -->
+<section class="slide">
+  <p class="eyebrow">Live artifact · job detail</p>
+  <h2 class="title">A real job, end to end</h2>
+  <p class="lead">Job <span class="mono" style="font-size:15px">d59d6ef5-1868-4e10-8999-96e762cfdc6e</span> — queued and succeeded in <strong>7.4 s</strong> with attempt 1 of 2.</p>
+
+  <div class="grid g2 mt18" style="gap:18px;align-items:start">
+    <div class="shot">
+      <img src="assets/10-job-detail.png" alt="Job detail page showing metadata, result JSON and artifacts" style="height:480px;object-fit:cover;object-position:top" />
+      <div class="cap"><span>Run metadata + result JSON</span><span>status: succeeded</span></div>
+    </div>
+    <div>
+      <pre class="code" style="font-size:12.5px"><span class="c"># page.html (excerpt, real artifact · 11 KB)</span>
+<span class="p">&lt;html</span> lang=<span class="s">"en"</span><span class="p">&gt;&lt;head&gt;</span>
+  <span class="p">&lt;meta</span> charset=<span class="s">"UTF-8"</span><span class="p">&gt;</span>
+  <span class="p">&lt;title&gt;</span>Quotes to Scrape<span class="p">&lt;/title&gt;</span>
+<span class="p">&lt;/head&gt;&lt;body&gt;</span>
+  <span class="p">&lt;div</span> class=<span class="s">"quote"</span> itemscope<span class="p">&gt;</span>
+    <span class="p">&lt;span</span> class=<span class="s">"text"</span><span class="p">&gt;</span>“The world as we have
+      created it is a process of our thinking…”<span class="p">&lt;/span&gt;</span>
+    <span class="p">&lt;small</span> class=<span class="s">"author"</span><span class="p">&gt;</span>Albert Einstein<span class="p">&lt;/small&gt;</span></pre>
+
+      <div class="shot mt12">
+        <img src="assets/11-job-artifacts.png" alt="Job artifacts card with screenshot preview and downloads" style="height:262px;object-fit:cover;object-position:bottom" />
+        <div class="cap"><span>Artifacts card · inline image preview</span><span>download via presigned URL</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g3 mt14" style="gap:12px">
+    <div class="card tight"><div class="mini-title">Result title</div><p style="margin-top:4px;font-size:14px"><strong style="color:#0f172a">Quotes to Scrape</strong></p></div>
+    <div class="card tight"><div class="mini-title">Selector: author</div><p style="margin-top:4px;font-size:14px"><strong style="color:#0f172a">Albert Einstein</strong></p></div>
+    <div class="card tight"><div class="mini-title">Artifacts</div><p style="margin-top:4px;font-size:14px"><strong style="color:#0f172a">3 files</strong> · screenshot, HTML, JSON</p></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Job detail artifact</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 28 ARTIFACT DEEP DIVE -->
+<section class="slide">
+  <p class="eyebrow">Live artifact · raw output</p>
+  <h2 class="title">What the browser actually returned</h2>
+  <p class="lead">The screenshot is the page as Chrome rendered it after JavaScript; the JSON is the extracted payload. Both were downloaded from object storage.</p>
+
+  <div class="grid g2 mt18" style="gap:20px;align-items:start">
+    <div>
+      <div class="shot">
+        <img src="assets/screenshot.png" alt="Screenshot artifact of quotes.toscrape.com rendered by Chrome" />
+        <div class="cap"><span><span class="mono">screenshot.png</span> · 1366 × 629 · 84 KB</span><span>Chrome · Selenium Grid</span></div>
+      </div>
+      <div class="row mt12" style="gap:8px;flex-wrap:wrap">
+        <span class="chip green">SHA-256 verified</span>
+        <span class="chip cyan">content_type image/png</span>
+        <span class="chip">expires_at set</span>
+      </div>
+    </div>
+
+    <div>
+      <pre class="code" style="font-size:12.5px;max-height:330px"><span class="c"># result.json (excerpt, real artifact)</span>
+{
+  <span class="p">"elapsed_ms"</span>: 2682,
+  <span class="p">"proxy"</span>: <span class="k">null</span>,
+  <span class="p">"redirects"</span>: [],
+  <span class="p">"render_js"</span>: <span class="k">true</span>,
+  <span class="p">"selectors"</span>: {
+    <span class="p">"author"</span>: <span class="s">"Albert Einstein"</span>,
+    <span class="p">"first_quote"</span>: <span class="s">"“The world as we have created it is a
+      process of our thinking. It cannot be changed
+      without changing our thinking.”"</span>
+  },
+  <span class="p">"status_code"</span>: <span class="k">null</span>,
+  <span class="p">"text"</span>: <span class="s">"Quotes to Scrape Login “The world as we
+    have created it is a process of our thinking…”"</span>
+}</pre>
+
+      <div class="card tight mt12">
+        <div class="mini-title">Three artifacts, three jobs</div>
+        <ul class="clean" style="margin-top:6px">
+          <li><strong>screenshot.png:</strong> visual proof for humans and change detection.</li>
+          <li><strong>page.html:</strong> the rendered DOM for offline re-parsing and debugging.</li>
+          <li><strong>result.json:</strong> the machine-readable extraction your pipeline consumes.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Artifact deep dive</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 29 API SURFACE -->
+<section class="slide">
+  <p class="eyebrow">API surface</p>
+  <h2 class="title">29 documented routes, generated from the code</h2>
+  <p class="lead">The OpenAPI schema is not hand-maintained: it is built from FastAPI routes and Pydantic models, then served at <span class="mono">/docs</span>.</p>
+
+  <div class="grid g-32 mt18" style="gap:20px;align-items:start">
+    <div>
+      <table class="tbl">
+        <thead><tr><th style="width:26%">Group</th><th>Endpoints</th></tr></thead>
+        <tbody>
+          <tr><td class="k">System</td><td class="mono" style="font-size:12.5px">GET /health · GET /ready</td></tr>
+          <tr><td class="k">Auth</td><td class="mono" style="font-size:12.5px">POST /v1/auth/signup · login · refresh · logout · GET /v1/auth/me</td></tr>
+          <tr><td class="k">Scrape</td><td class="mono" style="font-size:12.5px">POST /v1/scrape</td></tr>
+          <tr><td class="k">Automation</td><td class="mono" style="font-size:12.5px">POST /v1/automate</td></tr>
+          <tr><td class="k">Jobs</td><td class="mono" style="font-size:12.5px">GET /v1/jobs · GET /v1/jobs/{id} · cancel · events · export</td></tr>
+          <tr><td class="k">Artifacts</td><td class="mono" style="font-size:12.5px">GET /v1/jobs/{id}/artifacts · GET /v1/artifacts/{id}/download</td></tr>
+          <tr><td class="k">Keys</td><td class="mono" style="font-size:12.5px">GET/POST /v1/keys · PATCH/DELETE /v1/keys/{id}</td></tr>
+          <tr><td class="k">Schedules</td><td class="mono" style="font-size:12.5px">CRUD · run · runs · history · export</td></tr>
+          <tr><td class="k">Webhooks</td><td class="mono" style="font-size:12.5px">CRUD · deliveries · rotate-secret</td></tr>
+          <tr><td class="k">Billing</td><td class="mono" style="font-size:12.5px">checkout · portal · plans · usage · webhook</td></tr>
+        </tbody>
+      </table>
+      <div class="card tight mt12">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Async by design:</strong> creation endpoints return <span class="mono">202</span> and a job id. Clients poll or wait for a webhook — the HTTP connection is never held open for a browser run.</p>
+      </div>
+    </div>
+
+    <div class="shot">
+      <img src="assets/03-api-docs.png" alt="Swagger UI for the ScrapeFlow API" />
+      <div class="cap"><span><span class="mono">127.0.0.1:8000/docs</span></span><span>OpenAPI 3.1</span></div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The schema is generated from the implementation, so documentation cannot silently drift.</p></div>
+  <div class="footer"><span><span class="dot">●</span> API surface</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 30 DOCKER TOPOLOGY -->
+<section class="slide">
+  <p class="eyebrow">Infrastructure · local</p>
+  <h2 class="title">Eleven services in one Compose file</h2>
+  <p class="lead">One command builds and starts everything, waits for readiness, and prints the URLs.</p>
+
+  <table class="tbl mt16">
+    <thead><tr><th style="width:16%">Service</th><th style="width:26%">Image</th><th style="width:12%">Port</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td class="k">web</td><td class="mono">apps/web Dockerfile</td><td class="mono">3000</td><td>Next.js dashboard and BFF, production build</td></tr>
+      <tr><td class="k">api</td><td class="mono">apps/api Dockerfile</td><td class="mono">8000</td><td>FastAPI control plane, OpenAPI, metrics</td></tr>
+      <tr><td class="k">worker</td><td class="mono">same backend image</td><td class="mono">9101</td><td>Celery prefork workers, scrape + automation</td></tr>
+      <tr><td class="k">beat</td><td class="mono">same backend image</td><td>—</td><td>Celery Beat scheduler, schedule file on tmpfs</td></tr>
+      <tr><td class="k">migrate</td><td class="mono">same backend image</td><td>—</td><td>one-shot <span class="mono">alembic upgrade head</span>, exits 0</td></tr>
+      <tr><td class="k">egress-proxy</td><td class="mono">same backend image</td><td class="mono">8888</td><td>validating HTTP/CONNECT proxy with IP pinning</td></tr>
+      <tr><td class="k">postgres</td><td class="mono">postgres:16-alpine</td><td class="mono">5432</td><td>durable relational state, named volume</td></tr>
+      <tr><td class="k">redis</td><td class="mono">redis:7-alpine</td><td class="mono">6379</td><td>broker, token buckets, idempotency</td></tr>
+      <tr><td class="k">minio</td><td class="mono">quay.io/minio/minio</td><td class="mono">9000/9001</td><td>S3-compatible artifact store (s3mock fallback)</td></tr>
+      <tr><td class="k">minio-init</td><td class="mono">python helper</td><td>—</td><td>creates the bucket, exits 0</td></tr>
+      <tr><td class="k">selenium</td><td class="mono">standalone-chrome:4.25.0</td><td class="mono">4444</td><td>headless Chrome pool for real browser runs</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g3 mt12" style="gap:12px">
+    <div class="card tight"><div class="mini-title">Volumes</div><p style="margin-top:4px;font-size:13px" class="mono">pgdata · redisdata · miniodata</p></div>
+    <div class="card tight"><div class="mini-title">Network</div><p style="margin-top:4px;font-size:13px">single <span class="mono">app_net</span> bridge; only 3000/8000/9000/4444 bound to host</p></div>
+    <div class="card tight"><div class="mini-title">Health</div><p style="margin-top:4px;font-size:13px">pg_isready, redis-cli ping, api /ready, web /login</p></div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Eleven services, one network, three volumes. Reset is safe because all state is named.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Docker topology</span><span class="pagenum"></span></div>
+</section>
+<!-- 31 PRODUCTION -->
+<section class="slide">
+  <p class="eyebrow">Infrastructure · production</p>
+  <h2 class="title">Same topology, one TLS edge, explicit runbook</h2>
+  <p class="lead"><span class="mono">deploy/compose.prod.yml</span> reuses the backend image, adds Caddy 2.8 and removes host-exposed dev ports.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Edge</div>
+        <h3 style="margin-top:5px">Caddy 2.8</h3>
+        <p>Automatic HTTPS certificates, reverse proxy to <span class="mono">web</span> and <span class="mono">api</span>, HTTP→HTTPS redirect. Only 80/443 are published.</p>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Data</div>
+        <h3 style="margin-top:5px">Named volumes + backups</h3>
+        <p>PostgreSQL, Redis and MinIO volumes persist across deploys. The runbook covers <span class="mono">pg_dump</span>/restore, volume backup and a tested rollback path.</p>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Deploy</div>
+        <h3 style="margin-top:5px">Image-based</h3>
+        <p><span class="mono">SCRAPEFLOW_IMAGE</span> selects the backend tag; <span class="mono">migrate</span> runs before API/worker start; rollback is a tag change plus a migration check.</p>
+      </div>
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Not started here:</strong> the production Caddy topology needs a real domain and DNS. It is committed and documented, but <strong>not verified live</strong> in this environment.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="term">
+        <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>deploy/compose.prod.yml · services</span></div>
+        <pre>caddy          <span class="dim2"># TLS + reverse proxy, ports 80/443</span>
+api            <span class="dim2"># uvicorn, no host port</span>
+web            <span class="dim2"># next start, no host port</span>
+worker         <span class="dim2"># celery prefork</span>
+beat           <span class="dim2"># scheduler</span>
+migrate        <span class="dim2"># alembic upgrade head (one-shot)</span>
+egress-proxy   <span class="dim2"># validating forward proxy</span>
+postgres       <span class="dim2"># 16-alpine + pgdata</span>
+redis          <span class="dim2"># 7-alpine + redisdata</span>
+minio          <span class="dim2"># S3 store + miniodata</span>
+minio-init     <span class="dim2"># bucket bootstrap</span>
+selenium       <span class="dim2"># standalone-chrome</span></pre>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Runbook coverage</div>
+        <ul class="clean" style="margin-top:6px">
+          <li>Start, stop, scale workers, rotate secrets.</li>
+          <li>Backup and restore PostgreSQL; verify object storage.</li>
+          <li>Rollback an image tag and confirm migrations.</li>
+          <li>Incident triage: <span class="mono">/ready</span>, logs, queue depth, reaper.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Production changes the edge, not the application: same images, Caddy in front, no dev ports.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Production topology</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 32 RUNNERS -->
+<section class="slide">
+  <p class="eyebrow">Developer experience</p>
+  <h2 class="title">One command on Linux, macOS and Windows</h2>
+  <p class="lead">Four entry points, identical subcommands. The macOS wrapper delegates to the shared Bash runner; Windows has a native PowerShell implementation.</p>
+
+  <table class="tbl mt16">
+    <thead><tr><th style="width:22%">Entry point</th><th style="width:15%">Platform</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td class="k mono" style="font-size:13px">scripts/run.sh</td><td>Linux</td><td>Shared implementation: start, logs, status, seed, fix-db-password, stop, reset</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/run-macos.sh</td><td>macOS</td><td>Checks Docker Desktop and Python, then <span class="mono">exec</span>s the shared runner</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/run.ps1</td><td>Windows</td><td>Native PowerShell 5.1+: creates <span class="mono">.env</span> and the S3-mock override without Bash, Python or curl</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/run.cmd</td><td>Windows CMD</td><td>Launcher that runs <span class="mono">run.ps1</span> with <span class="mono">-ExecutionPolicy Bypass</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g2 mt16" style="gap:18px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>PowerShell 7.4.6 · exercised on Linux</span></div>
+      <pre><span class="p">PS&gt;</span> .\scripts\run.ps1 status
+NAME                     STATUS
+scrapeflow-api-1         Up (healthy)
+scrapeflow-worker-1      Up
+scrapeflow-web-1         Up (healthy)
+
+<span class="p">PS&gt;</span> .\scripts\run.ps1 fix-db-password
+==&gt; Starting PostgreSQL
+ALTER ROLE
+<span class="ok">role scrapeflow now matches DATABASE_URL</span></pre>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">What was verified</div>
+        <ul class="clean" style="margin-top:6px">
+          <li><span class="mono">bash -n</span> passes for both Bash scripts, including in a real Bash 3.2 container.</li>
+          <li>The macOS wrapper delegates correctly (run on Linux).</li>
+          <li>PowerShell: syntax, PSScriptAnalyzer (no errors), <span class="mono">status</span>, <span class="mono">fix-db-password</span>, <span class="mono">.env</span> generation (64-char secrets, mode 600, no BOM), fake-Docker start path.</li>
+          <li><span class="mono">.gitattributes</span> keeps shell/YAML LF and Windows launchers CRLF.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Honest limit:</strong> native Windows PowerShell 5.1 + Docker Desktop and native macOS execution were <strong>not available</strong> on this host. They remain UNVERIFIED; the scripts target those environments and the docs say so.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The platform is a first-class target, not a footnote in the README.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Cross-platform runners</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 33 QUALITY -->
+<section class="slide">
+  <p class="eyebrow">Quality gates</p>
+  <h2 class="title">322 Python tests, 30 web tests, zero lint or type errors</h2>
+  <p class="lead">Numbers below come from the final run recorded in <span class="mono">docs/presentation/evidence/</span>.</p>
+
+  <div class="grid g4 mt20" style="gap:14px">
+    <div class="card tight" style="border-top:4px solid #4f46e5"><div class="kpi"><span class="v">322</span><span class="l">Python tests passed</span></div></div>
+    <div class="card tight" style="border-top:4px solid #0891b2"><div class="kpi"><span class="v">83.08%</span><span class="l">Branch/line coverage</span></div></div>
+    <div class="card tight" style="border-top:4px solid #059669"><div class="kpi"><span class="v">30</span><span class="l">Vitest tests passed</span></div></div>
+    <div class="card tight" style="border-top:4px solid #d97706"><div class="kpi"><span class="v">0</span><span class="l">Lint / type errors</span></div></div>
+  </div>
+
+  <div class="grid g2 mt18" style="gap:18px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>python gates</span></div>
+      <pre><span class="dim2">$</span> uv run ruff check apps packages tests
+<span class="ok">All checks passed!</span>
+<span class="dim2">$</span> uv run ruff format --check apps packages tests
+<span class="ok">137 files already formatted</span>
+<span class="dim2">$</span> uv run mypy apps packages
+<span class="ok">Success: no issues found in 94 source files</span>
+<span class="dim2">$</span> uv run pytest -q --cov=apps --cov=packages
+Required test coverage of 70.0% reached.
+Total coverage: <span class="p">83.08%</span>
+<span class="ok">322 passed, 3 skipped</span> in 95.21s</pre>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Why 3 skips</div>
+        <ul class="clean" style="margin-top:6px">
+          <li><strong>Chrome binary test:</strong> <span class="mono">CHROME_BINARY</span> not set on this host; the Grid path is covered by an injected-driver unit test.</li>
+          <li><strong>Grid-only worker test:</strong> requires a live Selenium Grid browser.</li>
+          <li><strong>Locust import check:</strong> Locust is in the <span class="mono">e2e</span> group and not installed here.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Test shape</div>
+        <ul class="clean" style="margin-top:6px">
+          <li>39 Python test files: unit, integration, e2e and contract tests.</li>
+          <li>Integration tests run against real PostgreSQL and Redis in disposable containers.</li>
+          <li>Runner tests guard every platform entry point, so documentation cannot drift from scripts.</li>
+          <li>Compose regression tests assert the worker keeps the shared backend environment.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Every skip is documented with a reason. A green run without that context would be misleading.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Quality metrics</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 34 VERIFIED VS UNVERIFIED -->
+<section class="slide">
+  <p class="eyebrow">Scope discipline</p>
+  <h2 class="title">What is proven, and what is still an assumption</h2>
+  <p class="lead">A production claim is only as good as the environment it ran in. This slide is deliberately split.</p>
+
+  <div class="grid g2 mt20" style="gap:20px;align-items:start">
+    <div class="card" style="border-top:4px solid #059669">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Verified on this host</h3><span class="pill ok">evidence</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>Full dev Compose stack: 11 services, PostgreSQL/Redis/S3 mock healthy, migrations exit 0.</li>
+        <li>Real browser scrape through Selenium Grid: screenshot + HTML + JSON artifacts.</li>
+        <li>Artifact download through the API's presigned redirect.</li>
+        <li>JWT signup/login/refresh and the dashboard session.</li>
+        <li>Celery Beat scheduling, reaper, retention and worker metrics on 9101.</li>
+        <li>322 Python tests, Ruff, format and mypy; 30 Vitest tests, lint, typecheck, production build.</li>
+        <li>Playwright Chromium E2E: 5 passed, 2 skipped.</li>
+        <li>Runner scripts exercised: Bash 3.2 syntax, PowerShell 7.4.6 behaviour.</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top:4px solid #b45309">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Not verified here</h3><span class="pill warn">external dependency</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Live Stripe checkout/portal</strong> — no API keys or test account.</li>
+        <li><strong>Official MinIO image and lifecycle</strong> — the pinned tag returned 401; s3mock was used.</li>
+        <li><strong>Production Caddy topology</strong> — needs a real domain and DNS.</li>
+        <li><strong>Commercial proxy gateway</strong> — no upstream credentials.</li>
+        <li><strong>Real external webhook receiver</strong> — HMAC path is unit-tested only.</li>
+        <li><strong>Hosted GitHub Actions</strong> — workflow is config-validated, not run on GitHub.</li>
+        <li><strong>Locust capacity numbers</strong> — Locust not installed; profile shape tested only.</li>
+        <li><strong>Native Windows / macOS</strong> — scripts target them but were not executed there.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card tight mt14" style="border-left:4px solid #4f46e5">
+    <p style="font-size:14px"><strong style="color:#0f172a">Read this as:</strong> the application logic, security boundaries and integrations are implemented and tested locally. Anything that needs a paid or external service is clearly flagged — never presented as already working in production.</p>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The left column is evidence. The right column is a to-do list that needs external services.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Verified scope</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 35 ROADMAP -->
+<section class="slide">
+  <p class="eyebrow">Next steps</p>
+  <h2 class="title">From verified local platform to production service</h2>
+
+  <div class="grid g3 mt24" style="gap:16px">
+    <div class="card">
+      <span class="pill info">Now → 2 weeks</span>
+      <h3 style="margin-top:10px">Close the external gaps</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li>Stripe test-mode keys: checkout, portal, webhook replay.</li>
+        <li>Point artifacts at real MinIO or S3 with lifecycle rules.</li>
+        <li>Deploy Caddy on a staging domain and run the HTTPS journey.</li>
+        <li>Wire one real webhook receiver and verify HMAC + retries.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="pill info">2 → 6 weeks</span>
+      <h3 style="margin-top:10px">Prove capacity</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li>Run Locust against the queue with realistic selector payloads.</li>
+        <li>Measure browser concurrency limits per Grid node.</li>
+        <li>Add queue-depth autoscaling for workers.</li>
+        <li>Publish p50/p95 job duration and error budget.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="pill info">6+ weeks</span>
+      <h3 style="margin-top:10px">Product depth</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li>Change detection and diff notifications on schedules.</li>
+        <li>Per-tenant proxy pools with health checks.</li>
+        <li>SDKs generated from the OpenAPI schema.</li>
+        <li>Team invitations and finer-grained roles.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g2 mt18" style="gap:18px;align-items:start">
+    <div class="card tight">
+      <div class="mini-title">Engineering guardrails already in place</div>
+      <ul class="clean" style="margin-top:6px">
+        <li>Every new dependency goes through <span class="mono">uv</span> or <span class="mono">npm</span> with a committed lockfile.</li>
+        <li>Every API change updates Pydantic schemas, and therefore OpenAPI.</li>
+        <li>Every platform script has a test that fails if the commands drift.</li>
+        <li>Unverified paths are recorded in the final report and this deck.</li>
+      </ul>
+    </div>
+    <div class="card tight" style="background:#0b1220;border-color:#1c2a45">
+      <div class="mini-title" style="color:#7f92b1">Success criteria for the next milestone</div>
+      <ul class="clean" style="margin-top:6px">
+        <li style="color:#c8d6ee">A paid test subscription completes end to end in Stripe test mode.</li>
+        <li style="color:#c8d6ee">A staging HTTPS deployment passes the same Playwright journey.</li>
+        <li style="color:#c8d6ee">A Locust run produces a documented throughput and latency curve.</li>
+        <li style="color:#c8d6ee">All three platforms run the stack natively at least once.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>The next milestone is not more features — it is proving the external paths and the capacity curve.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Roadmap</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 36 CLOSING -->
+<section class="slide dark">
+  <div class="row" style="gap:14px">
+    <div class="logotile">SF</div>
+    <div>
+      <div style="font-size:13px;letter-spacing:2.4px;text-transform:uppercase;color:#8fa6ff;font-weight:800">Thank you</div>
+      <div style="font-size:13px;color:#7f92b1">ScrapeFlow · project and technology stack</div>
+    </div>
+  </div>
+
+  <h2 style="font-size:56px;line-height:1.04;letter-spacing:-2px;margin:40px 0 0;font-weight:900;max-width:1200px">
+    A scraping platform is a<br />
+    <span style="color:#9db2ff">queue, a boundary and a receipt.</span>
+  </h2>
+
+  <p class="lead" style="margin-top:20px;font-size:20px;max-width:1050px">
+    Queue the work so requests stay fast. Guard the boundary so user URLs cannot reach your network.
+    Keep a receipt — artifacts, hashes, events and metrics — so every job can be explained later.
+  </p>
+
+  <div class="grid g3 mt30" style="gap:16px;max-width:1250px">
+    <div class="card tight">
+      <div class="mini-title" style="color:#8fa6ff">Run it</div>
+      <div class="mono" style="font-size:13.5px;color:#dbe5f8;margin-top:6px;line-height:1.7">
+        ./scripts/run.sh<br>
+        ./scripts/run-macos.sh<br>
+        .\scripts\run.ps1
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="mini-title" style="color:#8fa6ff">Read it</div>
+      <div class="mono" style="font-size:13.5px;color:#dbe5f8;margin-top:6px;line-height:1.7">
+        SETUP.md<br>
+        docs/FINAL_REPORT.md<br>
+        docs/runbook.md
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="mini-title" style="color:#8fa6ff">Verify it</div>
+      <div class="mono" style="font-size:13.5px;color:#dbe5f8;margin-top:6px;line-height:1.7">
+        uv run pytest -q<br>
+        npm test &amp;&amp; npm run build<br>
+        npm run e2e
+      </div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:64px;bottom:70px;font-size:13px;color:#7f92b1">
+    Repo: <span class="mono" style="color:#dbe5f8">web-scrapping-tool</span> · commit <span class="mono" style="color:#dbe5f8">0c6d96c</span> · 10 Nov 2026
+  </div>
+  <div class="footer"><span><span class="dot">●</span> ScrapeFlow · Full Project &amp; Technology Stack</span><span class="pagenum"></span></div>
+</section>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  slides.forEach((slide, index) => {
+    const number = slide.querySelector('.pagenum');
+    if (number) {
+      number.textContent = String(index + 1).padStart(2, '0') + ' / ' + slides.length;
+    }
+  });
+</script>
+</body>
+</html>

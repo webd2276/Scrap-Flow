@@ -1,0 +1,253 @@
+<!-- 01 COVER -->
+<section class="slide dark">
+  <div class="row" style="gap:14px">
+    <div class="logotile">SF</div>
+    <div>
+      <div style="font-size:13px;letter-spacing:2.4px;text-transform:uppercase;color:#8fa6ff;font-weight:800">Project Presentation · 2026</div>
+      <div style="font-size:13px;color:#7f92b1">Multi-tenant scraping &amp; browser automation platform</div>
+    </div>
+  </div>
+
+  <h1 style="margin-top:64px">Scrape<span style="color:#8fa6ff">Flow</span></h1>
+
+  <p class="lead" style="margin-top:18px;font-size:24px;max-width:1080px;color:#c6d4ea">
+    A complete, production-shaped web scraping API and dashboard — one durable job queue,
+    a real headless browser path, SSRF-safe egress, tenant isolation, and artifact storage.
+  </p>
+
+  <div class="wrap" style="margin-top:26px">
+    <span class="chip">Python 3.12</span>
+    <span class="chip">FastAPI</span>
+    <span class="chip">Celery + Redis</span>
+    <span class="chip">PostgreSQL 16</span>
+    <span class="chip">Selenium Grid</span>
+    <span class="chip">S3 artifacts</span>
+    <span class="chip">Next.js 16</span>
+    <span class="chip">React 19</span>
+    <span class="chip">TypeScript</span>
+  </div>
+
+  <div class="grid g4" style="margin-top:36px;max-width:1180px;gap:14px">
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">11</div><div class="l" style="color:#8fa6ff">Services in dev</div></div>
+    </div>
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">29</div><div class="l" style="color:#8fa6ff">API routes</div></div>
+    </div>
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">322</div><div class="l" style="color:#8fa6ff">Tests passing</div></div>
+    </div>
+    <div class="card tight">
+      <div class="kpi"><div class="v" style="color:#f1f5ff">15</div><div class="l" style="color:#8fa6ff">DB models</div></div>
+    </div>
+  </div>
+
+  <div class="cover-meta" style="margin-top:52px">
+    <div><div class="l">Repository</div><div class="v">web-scrapping-tool / scrapeflow</div></div>
+    <div><div class="l">Base commit</div><div class="v mono">0c6d96c</div></div>
+    <div><div class="l">Evidence</div><div class="v">Live stack · real scrape · 322 tests</div></div>
+    <div><div class="l">Date</div><div class="v">10 November 2026</div></div>
+  </div>
+
+  <div style="position:absolute;right:64px;bottom:70px;text-align:right">
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6f86a8;font-weight:800">Live demo recorded on</div>
+    <div style="font-size:15px;color:#dbe5f8;margin-top:4px">Docker Compose · 11 services · healthy</div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> ScrapeFlow · Full Project &amp; Technology Stack</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 02 AGENDA -->
+<section class="slide">
+  <p class="eyebrow">Agenda</p>
+  <h2 class="title">What this deck covers</h2>
+  <p class="lead">Product → architecture → every technology choice, point by point → live artifacts → quality and honest limits.</p>
+
+  <div class="grid g4 mt30" style="gap:16px">
+    <div class="card tight">
+      <div class="num" style="background:#4f46e5">01</div>
+      <h3 style="margin-top:12px">Problem &amp; solution</h3>
+      <p>Why scraping at scale is hard, and the product that answers it.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#0891b2">02</div>
+      <h3 style="margin-top:12px">Architecture</h3>
+      <p>Control plane, workers, data stores and the request lifecycle.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#7c3aed">03</div>
+      <h3 style="margin-top:12px">Languages &amp; package managers</h3>
+      <p>Python 3.12 + <span class="mono">uv</span>; TypeScript + <span class="mono">npm</span>. Why each was chosen.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#059669">04</div>
+      <h3 style="margin-top:12px">Backend libraries</h3>
+      <p>FastAPI, SQLAlchemy, Celery, Selenium, boto3, security and ops.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#d97706">05</div>
+      <h3 style="margin-top:12px">Frontend libraries</h3>
+      <p>Next.js 16, React 19, Tailwind 4, the BFF pattern and tooling.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#4f46e5">06</div>
+      <h3 style="margin-top:12px">Live artifacts</h3>
+      <p>Dashboard screenshots, a real job, screenshot, HTML and JSON.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#0891b2">07</div>
+      <h3 style="margin-top:12px">Infrastructure &amp; quality</h3>
+      <p>Docker topology, cross-platform runners, test and lint gates.</p>
+    </div>
+    <div class="card tight">
+      <div class="num" style="background:#b91c1c">08</div>
+      <h3 style="margin-top:12px">Verified vs unverified</h3>
+      <p>Exactly what was proven locally, and what needs external services.</p>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Agenda</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 03 PROBLEM -->
+<section class="slide">
+  <p class="eyebrow">The problem</p>
+  <h2 class="title">Scraping at scale is not a <span class="mono" style="font-size:34px">requests.get()</span></h2>
+  <p class="lead">A single script works once. A platform has to survive concurrency, hostile pages, tenants, and audits.</p>
+
+  <div class="grid g4 mt30" style="gap:16px">
+    <div class="card">
+      <span class="pill bad">Reality 01</span>
+      <h3 style="margin-top:12px">Modern pages need a real browser</h3>
+      <p>Client-side rendering, lazy images, cookie walls and bot checks mean raw HTML is often empty. Chrome must be pooled, timeboxed and reaped.</p>
+    </div>
+    <div class="card">
+      <span class="pill bad">Reality 02</span>
+      <h3 style="margin-top:12px">Long jobs cannot live in a request</h3>
+      <p>A 60-second browser run would block an HTTP worker. Work must be queued durably, retried, cancellable, and observable from outside the request.</p>
+    </div>
+    <div class="card">
+      <span class="pill bad">Reality 03</span>
+      <h3 style="margin-top:12px">User-supplied URLs are an attack surface</h3>
+      <p>Without validation, <span class="mono">http://169.254.169.254</span> or <span class="mono">localhost</span> turns a scraper into an internal network scanner. DNS rebinding defeats naive checks.</p>
+    </div>
+    <div class="card">
+      <span class="pill bad">Reality 04</span>
+      <h3 style="margin-top:12px">Multi-tenancy is not optional</h3>
+      <p>Every job, key, artifact, schedule and webhook must be scoped to an organisation, with roles, quotas, rate limits and an audit trail.</p>
+    </div>
+  </div>
+
+  <div class="grid g2 mt18" style="gap:16px">
+    <div class="card tight" style="border-left:4px solid #4f46e5">
+      <p style="font-size:15px"><strong style="color:#0f172a">Implicit requirements:</strong> artifact storage with hashes and expiry, idempotent submissions, structured logs with correlation IDs, metrics an operator can alert on, and a UI that does not leak tokens.</p>
+    </div>
+    <div class="card tight" style="border-left:4px solid #0891b2">
+      <p style="font-size:15px"><strong style="color:#0f172a">Implicit constraints:</strong> the API process must never launch Chrome; workers may crash mid-job; storage may be MinIO, S3 or a mock; the same compose file should run on Linux, macOS and Windows.</p>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Problem statement</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 04 SOLUTION -->
+<section class="slide">
+  <p class="eyebrow">The solution</p>
+  <h2 class="title">One control plane. One queue. One dashboard.</h2>
+  <p class="lead">ScrapeFlow accepts a job over HTTP, returns <span class="mono">202 Accepted</span> immediately, and does the slow work in isolated workers.</p>
+
+  <div class="grid g-32 mt24" style="gap:24px;align-items:start">
+    <div>
+      <div class="card tight" style="padding:16px 18px">
+        <h3>What a user gets</h3>
+        <ul class="clean" style="margin-top:8px">
+          <li><strong>Scrape API</strong> — URL, CSS/XPath selectors, page text, links, meta, screenshots, HTML capture.</li>
+          <li><strong>Browser automation</strong> — a typed step DSL: goto, click, type, wait, extract, screenshot.</li>
+          <li><strong>Schedules</strong> — cron expressions, run history, manual trigger.</li>
+          <li><strong>Artifacts</strong> — presigned downloads for screenshot, HTML and JSON, with SHA-256 and expiry.</li>
+          <li><strong>Webhooks</strong> — signed deliveries with a durable outbox and retries.</li>
+          <li><strong>Billing</strong> — Stripe checkout/portal plus a credit ledger and plan quotas.</li>
+        </ul>
+      </div>
+      <div class="row mt14" style="gap:8px;flex-wrap:wrap">
+        <span class="chip accent">202 async jobs</span>
+        <span class="chip cyan">SSRF-safe egress</span>
+        <span class="chip green">JWT + hashed API keys</span>
+        <span class="chip amber">Prometheus metrics</span>
+      </div>
+    </div>
+
+    <div class="shot">
+      <img src="assets/04-jobs.png" alt="ScrapeFlow jobs dashboard with a succeeded scrape job" />
+      <div class="cap"><span>Live dashboard · <span class="mono">/jobs</span></span><span>real job · 7.4 s</span></div>
+    </div>
+  </div>
+
+  <div class="grid g3 mt18" style="gap:14px">
+    <div class="card tight"><div class="kpi"><span class="v accent">4</span><span class="l">Plans: free → business</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v accent">15</span><span class="l">SQLAlchemy models</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v accent">29</span><span class="l">HTTP routes in OpenAPI</span></div></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Product overview</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 05 FEATURE MAP -->
+<section class="slide">
+  <p class="eyebrow">Capability map</p>
+  <h2 class="title">Everything the platform ships</h2>
+  <p class="lead">Each box is implemented in the repository and mapped to a module, not a roadmap promise.</p>
+
+  <div class="grid g4 mt24" style="gap:14px">
+    <div class="card tight">
+      <span class="pill info">Ingest</span>
+      <h3 style="margin-top:9px">Scrape jobs</h3>
+      <p>HTTP fetch or real browser. Named selectors, extraction limits, redirects, timeout, idempotency key.</p>
+      <div class="mini-title" style="margin-top:9px">apps/api/routers/scrape.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Automate</span>
+      <h3 style="margin-top:9px">Step workflows</h3>
+      <p>Typed actions with limits per plan, browser-only execution, optional screenshots per step.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/automate.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Operate</span>
+      <h3 style="margin-top:9px">Durable jobs</h3>
+      <p>Queued → running → terminal states, events, cancellation, retries, hard timeout + reaper.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/tasks/jobs.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Store</span>
+      <h3 style="margin-top:9px">Artifacts</h3>
+      <p>S3-compatible upload, SHA-256, content type, retention by plan, presigned download URLs.</p>
+      <div class="mini-title" style="margin-top:9px">packages/core/artifacts.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Repeat</span>
+      <h3 style="margin-top:9px">Schedules</h3>
+      <p>Cron validation via croniter, per-run history, Celery Beat dispatch, manual run endpoint.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/tasks/schedules.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Notify</span>
+      <h3 style="margin-top:9px">Signed webhooks</h3>
+      <p>HMAC signatures, encrypted endpoint secrets, outbox delivery and retry tracking.</p>
+      <div class="mini-title" style="margin-top:9px">apps/worker/webhooks.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Govern</span>
+      <h3 style="margin-top:9px">Tenancy &amp; quota</h3>
+      <p>Organisations, memberships, roles, scoped API keys, credit ledger, concurrency limits.</p>
+      <div class="mini-title" style="margin-top:9px">packages/core/quota.py</div>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Observe</span>
+      <h3 style="margin-top:9px">Ops surface</h3>
+      <p>JSON logs with request/job IDs, Prometheus metrics, Sentry, <span class="mono">/health</span> and <span class="mono">/ready</span>.</p>
+      <div class="mini-title" style="margin-top:9px">packages/core/observability.py</div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Feature map</span><span class="pagenum"></span></div>
+</section>

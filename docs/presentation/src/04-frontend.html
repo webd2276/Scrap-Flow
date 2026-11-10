@@ -1,0 +1,346 @@
+<!-- 18 TENANCY / QUOTA / BILLING -->
+<section class="slide">
+  <p class="eyebrow">Backend · commercial layer</p>
+  <h2 class="title">Tenancy, quotas, plans and Stripe</h2>
+  <p class="lead">Isolation is structural: every query is scoped by organisation, and every job is priced before it runs.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div>
+      <div class="grid g2" style="gap:13px">
+        <div class="card tight">
+          <h3>Organisation scope</h3>
+          <p><span class="mono">organizations</span> own users through <span class="mono">memberships</span>, and own jobs, keys, schedules, webhooks, artifacts and ledger rows.</p>
+        </div>
+        <div class="card tight">
+          <h3>Plan catalog is code</h3>
+          <p>Plans are frozen dataclasses in <span class="mono">packages/core/plans.py</span> — not editable database rows. A billing change is a reviewed code change with tests.</p>
+        </div>
+        <div class="card tight">
+          <h3>Credit weights</h3>
+          <p>base 1 · browser +1 · screenshot +1 · proxy 2 · each extra page +1 · each started 10 automation steps +1.</p>
+        </div>
+        <div class="card tight">
+          <h3>Usage ledger</h3>
+          <p>Reserve → settle → release. A failed job does not silently consume credits; balances are reconstructable from rows.</p>
+        </div>
+      </div>
+
+      <table class="tbl mt14">
+        <thead><tr><th>Plan</th><th>Credits / mo</th><th>Concurrency</th><th>Steps</th><th>Pages</th><th>Retention</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Free</td><td class="mono">100</td><td class="mono">1</td><td class="mono">10</td><td class="mono">5</td><td class="mono">1 day</td></tr>
+          <tr><td class="k">Starter</td><td class="mono">5,000</td><td class="mono">3</td><td class="mono">50</td><td class="mono">25</td><td class="mono">7 days</td></tr>
+          <tr><td class="k">Pro</td><td class="mono">50,000</td><td class="mono">10</td><td class="mono">100</td><td class="mono">100</td><td class="mono">30 days</td></tr>
+          <tr><td class="k">Business</td><td class="mono">250,000</td><td class="mono">25</td><td class="mono">200</td><td class="mono">500</td><td class="mono">90 days</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Stripe <span class="mono dim" style="font-size:12px">stripe 11–15</span></h3><span class="chip accent">billing</span></div>
+        <div class="divider"></div>
+        <ul class="clean">
+          <li><strong>Checkout:</strong> <span class="mono">POST /v1/billing/checkout</span> creates a subscription session.</li>
+          <li><strong>Portal:</strong> <span class="mono">POST /v1/billing/portal</span> hands plan changes and invoices to Stripe.</li>
+          <li><strong>Webhook:</strong> <span class="mono">POST /v1/billing/webhook</span> verifies the signature and records the event id in <span class="mono">stripe_events</span> for idempotency.</li>
+          <li><strong>Plans endpoint:</strong> <span class="mono">GET /v1/billing/plans</span> and <span class="mono">/v1/billing/usage</span> drive the dashboard.</li>
+        </ul>
+      </div>
+
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <div class="mini-title">Verification status</div>
+        <p style="margin-top:6px;font-size:13.5px">The integration code and webhook idempotency are implemented and unit-tested. <strong style="color:#0f172a">Live Stripe checkout was not executed</strong> — no API keys or test account were available. It is listed as an unverified external path, not as working revenue.</p>
+      </div>
+
+      <div class="card tight mt12">
+        <div class="mini-title">Rate limiting</div>
+        <p style="margin-top:6px;font-size:13.5px">Atomic Redis token bucket with Lua: capacity, refill rate and cost are arguments, and the script returns allowed / remaining / retry-after / reset. Response headers make throttling visible to clients.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Tenancy, quota and billing</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 19 OBSERVABILITY -->
+<section class="slide">
+  <p class="eyebrow">Backend · observability</p>
+  <h2 class="title">Logs you can join, metrics you can alert on</h2>
+  <p class="lead">Phase 9 added correlation, metrics and error reporting; the evidence below is from the running stack, not a mock.</p>
+
+  <div class="grid g3 mt20" style="gap:16px">
+    <div class="card tight">
+      <h3>structlog 24.4</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>JSON logs with <span class="mono">request_id</span> on every API line.</li>
+        <li>Worker logs bind <span class="mono">job_id</span> for the whole task.</li>
+        <li><span class="mono">X-Request-ID</span> accepted only when safe, generated otherwise.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>prometheus-client 0.20</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>HTTP counters/histograms by route template — no cardinality explosion.</li>
+        <li>Queue depth, browser sessions, webhook backlog, DB and Redis latency.</li>
+        <li><span class="mono">/metrics</span> excluded from its own counters; worker prefork aggregation on 9101.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>sentry-sdk 2.14</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>FastAPI integration for unhandled exceptions.</li>
+        <li><span class="mono">send_default_pii=False</span> by design.</li>
+        <li>Optional DSN: absent means disabled, not crashing.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g-32 mt16" style="gap:20px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>GET /metrics · live</span></div>
+      <pre><span class="dim2">$</span> curl -s 127.0.0.1:8000/metrics | grep <span class="s">'^scrapeflow_'</span>
+<span class="dim2"># method label trimmed to fit the slide</span>
+scrapeflow_http_requests_total{route=<span class="s">"/health"</span>,status=<span class="s">"200"</span>} <span class="p">82.0</span>
+scrapeflow_http_requests_total{route=<span class="s">"/v1/scrape"</span>,status=<span class="s">"202"</span>} <span class="p">1.0</span>
+scrapeflow_http_requests_total{route=<span class="s">"/v1/jobs/{job_id}"</span>,status=<span class="s">"200"</span>} <span class="p">3.0</span>
+scrapeflow_http_requests_total{route=<span class="s">"/v1/artifacts/{id}/download"</span>,status=<span class="s">"307"</span>} <span class="p">5.0</span>
+
+<span class="dim2">$</span> curl -s 127.0.0.1:8000/ready
+{<span class="s">"status"</span>:<span class="s">"ready"</span>,<span class="s">"checks"</span>:{<span class="s">"postgres"</span>:{<span class="s">"status"</span>:<span class="s">"ok"</span>},<span class="s">"redis"</span>:{<span class="s">"status"</span>:<span class="s">"ok"</span>}}}</pre>
+    </div>
+
+    <div class="grid" style="gap:12px">
+      <div class="card tight">
+        <div class="mini-title">Probes</div>
+        <p style="margin-top:5px;font-size:13.5px"><span class="mono">/health</span> is liveness (process up). <span class="mono">/ready</span> checks PostgreSQL and Redis and returns <span class="mono">503</span> when either fails — that is what Compose and Caddy should gate on.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Alerting assets</div>
+        <p style="margin-top:5px;font-size:13.5px">Prometheus scrape config, alert rules and a Grafana dashboard are committed and configuration-validated. Prometheus/Grafana themselves were not started in this environment.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Capacity honesty</div>
+        <p style="margin-top:5px;font-size:13.5px">A Locust profile exists and its shape is unit-tested, but <strong style="color:#0f172a">Locust is not installed here</strong>. No throughput number is claimed; the 3 skipped tests record that gap.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Observability</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 20 FRONTEND MAP -->
+<section class="slide">
+  <p class="eyebrow">Frontend libraries</p>
+  <h2 class="title">Next.js 16, React 19, TypeScript, Tailwind 4</h2>
+  <p class="lead">A deliberately small dependency surface: three runtime packages, and everything else is tooling.</p>
+
+  <div class="grid g-32 mt20" style="gap:20px;align-items:start">
+    <div class="grid g2" style="gap:13px">
+      <div class="card tight">
+        <div class="mini-title">Framework</div>
+        <h3 style="margin-top:5px">Next.js 16.4.5</h3>
+        <p>App Router, server route handlers for the BFF, file-based pages, production build with <span class="mono">next build</span>.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">UI runtime</div>
+        <h3 style="margin-top:5px">React 19.3.1</h3>
+        <p>Client components for interactive forms and polling; server components for page shells. <span class="mono">react-dom</span> pinned to the same version.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Language</div>
+        <h3 style="margin-top:5px">TypeScript 5.9.3</h3>
+        <p>Strict checking via <span class="mono">next typegen &amp;&amp; tsc --noEmit</span>. API types live in <span class="mono">lib/types.ts</span>.</p>
+      </div>
+      <div class="card tight">
+        <div class="mini-title">Styling</div>
+        <h3 style="margin-top:5px">Tailwind CSS 4.3.4</h3>
+        <p>PostCSS plugin, utility classes in components, no runtime CSS-in-JS. Design tokens are Tailwind's palette plus a small set of shared primitives.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Tooling (devDependencies)</div>
+        <table class="tbl" style="margin-top:8px">
+          <tbody>
+            <tr><td class="k">ESLint</td><td class="mono">9.39.5</td><td>flat config + <span class="mono">eslint-config-next</span></td></tr>
+            <tr><td class="k">Vitest</td><td class="mono">5.1.0</td><td>unit tests for pure UI logic</td></tr>
+            <tr><td class="k">Vite</td><td class="mono">8.3.6</td><td>transform engine behind Vitest</td></tr>
+            <tr><td class="k">Playwright</td><td class="mono">1.65.0</td><td>browser E2E + PDF rendering</td></tr>
+            <tr><td class="k">TypeScript</td><td class="mono">5.9.3</td><td>typecheck</td></tr>
+            <tr><td class="k">PostCSS plugin</td><td class="mono">4.3.4</td><td>Tailwind pipeline</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card tight mt12">
+        <div class="mini-title">Runtime dependencies</div>
+        <div class="row mt8" style="gap:8px;flex-wrap:wrap">
+          <span class="chip accent">next 16.4.5</span>
+          <span class="chip accent">react 19.3.1</span>
+          <span class="chip accent">react-dom 19.3.1</span>
+        </div>
+        <p style="margin-top:9px;font-size:13.5px">No state library, no fetch wrapper library, no component kit. Auth state is a React context; HTTP is a small typed <span class="mono">request()</span> helper; UI primitives are local.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g4 mt16" style="gap:12px">
+    <div class="card tight"><div class="kpi"><span class="v">3</span><span class="l">Runtime packages</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">9</span><span class="l">Top-level routes</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">30</span><span class="l">Vitest tests</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">7</span><span class="l">Playwright specs run</span></div></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Frontend stack map</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 21 NEXT.JS / BFF -->
+<section class="slide">
+  <p class="eyebrow">Frontend · architecture</p>
+  <h2 class="title">The dashboard talks to a same-origin BFF, not to the API</h2>
+  <p class="lead">One origin in the browser solves CORS, cookie policy and token exposure at the same time.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div>
+      <div class="mini-title">Server route handlers</div>
+      <table class="tbl" style="margin-top:8px">
+        <tbody>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/signup</td><td>creates org + owner, sets refresh cookie</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/login</td><td>credentials → access token + cookie</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/refresh</td><td>rotates refresh token, returns access token</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/auth/logout</td><td>revokes and clears the cookie</td></tr>
+          <tr><td class="k mono" style="font-size:13px">/api/proxy/[...path]</td><td>authorised pass-through to FastAPI</td></tr>
+        </tbody>
+      </table>
+
+      <div class="card tight mt14">
+        <h3>Browser routes</h3>
+        <div class="row mt8" style="gap:7px;flex-wrap:wrap">
+          <span class="chip">/login</span><span class="chip">/signup</span><span class="chip">/jobs</span><span class="chip">/jobs/[id]</span><span class="chip">/scrape</span><span class="chip">/automate</span><span class="chip">/schedules</span><span class="chip">/keys</span><span class="chip">/billing</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Why a BFF</div>
+        <ul class="clean" style="margin-top:7px">
+          <li><strong>Token safety:</strong> the refresh token lives in an httpOnly cookie the JavaScript cannot read.</li>
+          <li><strong>No CORS:</strong> the browser only ever calls its own origin.</li>
+          <li><strong>In-memory access token:</strong> a hard refresh calls <span class="mono">/api/auth/refresh</span> and restores the session.</li>
+          <li><strong>One place to change:</strong> upstream API URL is server configuration, not a client constant.</li>
+        </ul>
+      </div>
+
+      <pre class="code mt12" style="font-size:12.5px"><span class="c">// conceptual flow</span>
+Browser  ──fetch──▶  Next.js /api/proxy/*
+                         │  attaches access token
+                         ▼
+                     FastAPI /v1/*
+                         │  JSON + status
+                         ▼
+Browser  ◀── same-origin response</pre>
+
+      <div class="card tight mt12" style="border-left:4px solid #0891b2">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Trade-off:</strong> every API call takes one extra hop. In exchange, the app has no CORS configuration, no token in web storage, and a single auditable boundary.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> BFF architecture</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 22 UI SYSTEM -->
+<section class="slide">
+  <p class="eyebrow">Frontend · UI system</p>
+  <h2 class="title">Tailwind utilities plus a small local component kit</h2>
+  <p class="lead">No design-system dependency. Nine primitives and four editors cover every screen in the product.</p>
+
+  <div class="grid g2 mt20" style="gap:20px;align-items:start">
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Primitives · <span class="mono">components/ui.tsx</span></div>
+        <div class="row mt8" style="gap:7px;flex-wrap:wrap">
+          <span class="chip">Card</span><span class="chip">CardHeader</span><span class="chip">Button</span><span class="chip">Input</span><span class="chip">Select</span><span class="chip">Field</span><span class="chip">Badge</span><span class="chip">Alert</span><span class="chip">Spinner</span><span class="chip">EmptyState</span><span class="chip">CopyButton</span>
+        </div>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Composite editors</div>
+        <ul class="clean" style="margin-top:7px">
+          <li><strong>SelectorEditor:</strong> name + CSS/XPath + optional attribute + multi-match.</li>
+          <li><strong>KeyValueEditor:</strong> arbitrary request headers as rows.</li>
+          <li><strong>ExtractOptionsEditor:</strong> title, text, links, meta and hard limits.</li>
+          <li><strong>Automation step builder:</strong> typed actions with per-action defaults.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Feedback patterns</div>
+        <p style="margin-top:6px;font-size:13.5px">Inline errors from <span class="mono">ApiError</span>, optimistic disabled states while submitting, skeletons/spinners for polling pages, and empty states that explain the next action.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="shot">
+        <img src="assets/05-scrape-form.png" alt="Scrape form with live request preview" />
+        <div class="cap"><span>Live request preview updates as you type</span><span><span class="mono">POST /v1/scrape</span></span></div>
+      </div>
+      <div class="grid g2 mt12" style="gap:12px">
+        <div class="card tight"><div class="mini-title">Styling</div><p style="margin-top:5px;font-size:13px">Tailwind 4 utility classes, no CSS-in-JS runtime, consistent slate/indigo palette.</p></div>
+        <div class="card tight"><div class="mini-title">Accessibility</div><p style="margin-top:5px;font-size:13px">Labels bound to inputs, real buttons, visible focus states, semantic headings.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> UI component system</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 23 FRONTEND TOOLING -->
+<section class="slide">
+  <p class="eyebrow">Frontend · quality tooling</p>
+  <h2 class="title">Lint, typecheck, unit test, build, then E2E</h2>
+  <p class="lead">Five gates, all runnable from <span class="mono">apps/web</span> with npm scripts. The same commands run in CI.</p>
+
+  <div class="grid g-32 mt20" style="gap:20px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>apps/web · verified gates</span></div>
+      <pre><span class="dim2">$</span> npm run lint
+<span class="ok">✔</span> eslint .  <span class="dim2">no errors</span>
+
+<span class="dim2">$</span> npm run typecheck
+<span class="ok">✔</span> next typegen &amp;&amp; tsc --noEmit
+
+<span class="dim2">$</span> npm test
+<span class="ok">✔</span> 30 tests passed  <span class="dim2">(3 files)</span>
+
+<span class="dim2">$</span> npm run build
+<span class="ok">✔</span> compiled successfully
+<span class="ok">✔</span> route table generated
+
+<span class="dim2">$</span> npm run e2e
+<span class="ok">✔</span> 5 passed · 2 skipped  <span class="dim2">(Chromium)</span></pre>
+    </div>
+
+    <div class="grid" style="gap:12px">
+      <div class="card tight">
+        <h3>ESLint 9.39</h3>
+        <p>Flat config with <span class="mono">eslint-config-next</span>; catches React hook mistakes and Next-specific pitfalls.</p>
+      </div>
+      <div class="card tight">
+        <h3>Vitest 5.1</h3>
+        <p>Pure-logic tests for formatting, safe downloads and automation payload building — fast, no browser needed.</p>
+      </div>
+      <div class="card tight">
+        <h3>Playwright 1.65</h3>
+        <p>The journey spec drives signup → scrape → artifacts in Chromium. The two skips are environment-gated browser paths.</p>
+      </div>
+      <div class="card tight">
+        <h3>next build</h3>
+        <p>Production compile catches server/client boundary errors that typecheck alone cannot. The web image runs the built output.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Frontend quality gates</span><span class="pagenum"></span></div>
+</section>

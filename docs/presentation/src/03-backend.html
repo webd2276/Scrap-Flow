@@ -1,0 +1,374 @@
+<!-- 12 WEB FRAMEWORK -->
+<section class="slide">
+  <p class="eyebrow">Backend · web layer</p>
+  <h2 class="title">FastAPI, Starlette, Uvicorn, Pydantic</h2>
+  <p class="lead">Four libraries with four distinct jobs. Each one is replaceable in theory and load-bearing in practice.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div class="grid" style="gap:13px">
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">FastAPI <span class="mono dim" style="font-size:12px">0.162</span></h3><span class="chip accent">the API surface</span></div>
+        <ul class="clean" style="margin-top:8px">
+          <li><strong>Routers per resource:</strong> auth, scrape, automate, jobs, keys, schedules, webhooks, billing, exports, metrics, health.</li>
+          <li><strong>Dependency injection:</strong> <span class="mono">Depends()</span> resolves the DB session, current principal, org and required scope.</li>
+          <li><strong>Async endpoints:</strong> all I/O is awaited; long work is offloaded, never awaited in-request.</li>
+          <li><strong>Contract generation:</strong> <span class="mono">response_model</span> produces the OpenAPI schema served at <span class="mono">/docs</span>.</li>
+        </ul>
+      </div>
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Starlette <span class="mono dim" style="font-size:12px">1.10</span></h3><span class="chip cyan">the foundation</span></div>
+        <p style="margin-top:7px">ASGI toolkit underneath FastAPI. Used directly for the <span class="mono">RequestContextMiddleware</span> that accepts a safe <span class="mono">X-Request-ID</span>, binds it to logs, and rejects unsafe values.</p>
+      </div>
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Uvicorn <span class="mono dim" style="font-size:12px">0.32 [standard]</span></h3><span class="chip green">the server</span></div>
+        <p style="margin-top:7px">Runs the ASGI app on port 8000 inside the container. <span class="mono">[standard]</span> adds uvloop and httptools for throughput; health probes hit <span class="mono">/health</span> and <span class="mono">/ready</span>.</p>
+      </div>
+      <div class="card tight">
+        <div class="row" style="justify-content:space-between"><h3 style="margin:0">Pydantic v2 <span class="mono dim" style="font-size:12px">2.9+</span></h3><span class="chip amber">the contract</span></div>
+        <p style="margin-top:7px">Rust-backed validation and serialisation. <span class="mono">pydantic-settings</span> loads <span class="mono">.env</span> into a typed <span class="mono">Settings</span> object at startup, so a bad secret fails fast.</p>
+      </div>
+    </div>
+
+    <div>
+      <pre class="code" style="font-size:12.5px"><span class="c"># apps/api/routers/scrape.py — shape (simplified)</span>
+<span class="k">@router</span>.post(
+    <span class="s">""</span>,
+    response_model=JobAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+<span class="k">async def</span> create_scrape(
+    payload: ScrapeRequest,
+    principal: Principal = Depends(require_scope(<span class="s">"scrape:write"</span>)),
+    session: AsyncSession = Depends(get_session),
+    idempotency_key: str | <span class="k">None</span> = Header(<span class="k">None</span>, alias=<span class="s">"Idempotency-Key"</span>),
+) -> JobAccepted:
+    <span class="c"># validate → quota → persist queued job → enqueue</span>
+    job = <span class="k">await</span> dispatch.create_job(...)
+    <span class="k">return</span> JobAccepted(job=job, deduplicated=<span class="k">False</span>)</pre>
+
+      <div class="card tight mt14">
+        <div class="mini-title">Why this combination</div>
+        <ul class="clean" style="margin-top:7px">
+          <li><strong>OpenAPI for free:</strong> 29 documented routes become a browsable, testable contract.</li>
+          <li><strong>One validation layer:</strong> the same Pydantic models guard HTTP input and serialise output.</li>
+          <li><strong>Typed settings:</strong> missing <span class="mono">DATABASE_URL</span> is a startup error, not a 3 a.m. surprise.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Web framework</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 13 DATA LAYER -->
+<section class="slide">
+  <p class="eyebrow">Backend · persistence</p>
+  <h2 class="title">SQLAlchemy async, asyncpg, Alembic, PostgreSQL 16</h2>
+  <p class="lead">PostgreSQL is the source of truth. Redis is a cache and a queue — never the record of what happened.</p>
+
+  <div class="grid g-23 mt20" style="gap:22px;align-items:start">
+    <div class="grid" style="gap:12px">
+      <div class="card tight">
+        <h3>SQLAlchemy 2.0 (async)</h3>
+        <p><span class="mono">AsyncSession</span> per request, declarative models, typed <span class="mono">select()</span>. Relationships and constraints live in the model layer, not in ad-hoc SQL.</p>
+      </div>
+      <div class="card tight">
+        <h3>asyncpg 0.30</h3>
+        <p>The actual PostgreSQL driver. Binary protocol, prepared statements, no psycopg overhead. URL form: <span class="mono">postgresql+asyncpg://…</span>.</p>
+      </div>
+      <div class="card tight">
+        <h3>Alembic 1.14</h3>
+        <p>Five versioned migrations run by the <span class="mono">migrate</span> compose service before the API starts. <span class="mono">alembic current</span> / <span class="mono">heads</span> are documented runbook commands.</p>
+      </div>
+      <div class="card tight">
+        <h3>Pooling fix that matters</h3>
+        <p>Celery tasks create and destroy an event loop per job. Reusing a pooled asyncpg connection across loops caused <span class="mono">Future attached to a different loop</span>; workers now use <span class="mono">NullPool</span> and a regression test runs the reaper across two loops.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="mini-title">15 mapped tables</div>
+      <div class="grid g2" style="gap:9px;margin-top:8px">
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">organizations</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">users</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">memberships</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">api_keys</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">refresh_tokens</div></div>
+        <div class="card tight" style="padding:10px 13px"><div class="mono" style="font-size:13px">audit_logs</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#c9ccff;background:#f4f5ff"><div class="mono" style="font-size:13px">jobs</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#c9ccff;background:#f4f5ff"><div class="mono" style="font-size:13px">job_events</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#c9ccff;background:#f4f5ff"><div class="mono" style="font-size:13px">artifacts</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">schedules</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">schedule_runs</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">webhook_endpoints</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#bfe8d6;background:#f1fbf6"><div class="mono" style="font-size:13px">webhook_deliveries</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#f0dcb9;background:#fdf8ef"><div class="mono" style="font-size:13px">usage_ledger</div></div>
+        <div class="card tight" style="padding:10px 13px;border-color:#f0dcb9;background:#fdf8ef"><div class="mono" style="font-size:13px">stripe_events</div></div>
+        <div class="card tight" style="padding:10px 13px;display:flex;align-items:center"><span class="dim" style="font-size:12px">+ enums &amp; indexes</span></div>
+      </div>
+      <div class="card tight mt12" style="background:#0b1220;border-color:#1c2a45">
+        <div class="mini-title" style="color:#7f92b1">state machine stored on jobs</div>
+        <div class="mono" style="font-size:12.5px;color:#c8d6ee;margin-top:6px;line-height:1.7">
+          queued → running → <span style="color:#86efac">succeeded</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘ <span style="color:#fca5a5">failed</span> · <span style="color:#fcd34d">timed_out</span> · cancelled
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Persistence layer</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 14 ASYNC JOBS -->
+<section class="slide">
+  <p class="eyebrow">Backend · async work</p>
+  <h2 class="title">Celery, Redis, Beat and croniter</h2>
+  <p class="lead">The API answers in milliseconds; workers do the slow, failure-prone part with retries and a hard deadline.</p>
+
+  <div class="grid g3 mt22" style="gap:18px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Celery 5.4</h3><span class="chip accent">worker</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Prefork pool:</strong> isolation from crashes and blocking Selenium calls.</li>
+        <li><strong>Retries:</strong> <span class="mono">max_attempts=2</span> recorded on the job row.</li>
+        <li><strong>Task families:</strong> jobs, reaper, reconcile, retention, schedules, webhooks, health.</li>
+        <li><strong>Multiprocess metrics:</strong> prefork counters aggregated through <span class="mono">PROMETHEUS_MULTIPROC_DIR</span> on port 9101.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Redis 7</h3><span class="chip amber">broker + state</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Broker:</strong> Celery task transport with append-only persistence enabled.</li>
+        <li><strong>Token bucket:</strong> atomic Lua script per key/org — no race between read and write.</li>
+        <li><strong>Idempotency:</strong> <span class="mono">Idempotency-Key</span> replays the original job instead of double-charging.</li>
+        <li><strong>Locks &amp; counters:</strong> short-lived coordination that is safe to lose.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Beat + croniter</h3><span class="chip cyan">time</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Beat scheduler:</strong> separate container, schedule file on a tmpfs.</li>
+        <li><strong>croniter 3.0:</strong> validates cron expressions and computes the next fire time.</li>
+        <li><strong>Run history:</strong> every fire creates a <span class="mono">schedule_runs</span> row with a terminal status.</li>
+        <li><strong>Manual trigger:</strong> <span class="mono">POST /v1/schedules/{id}/run</span> for testing.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g-32 mt18" style="gap:20px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>worker + beat (live stack)</span></div>
+      <pre><span class="dim2">$</span> docker compose ps --format <span class="s">'{{.Service}}  {{.Status}}'</span>
+api           Up (healthy)
+worker        Up
+beat          Up
+redis         Up (healthy)
+postgres      Up (healthy)
+
+<span class="dim2"># Celery Beat schedules due work every minute;</span>
+<span class="dim2"># the reaper closes orphaned browser sessions and hard-times-out jobs.</span>
+<span class="ok">[tasks]</span> jobs · reaper · reconcile · retention · schedules · webhooks</pre>
+    </div>
+    <div>
+      <div class="card tight">
+        <h3>Failure handling, explicitly</h3>
+        <ul class="clean" style="margin-top:8px">
+          <li><strong>Hard timeout:</strong> a job cannot run forever; it moves to <span class="mono">timed_out</span>.</li>
+          <li><strong>Reaper:</strong> scheduled task kills orphan browser sessions and reconciles stuck rows.</li>
+          <li><strong>Reconcile:</strong> compares broker and database state after a crash.</li>
+          <li><strong>Retention:</strong> expires artifacts according to the plan's retention days.</li>
+          <li><strong>Webhook outbox:</strong> deliveries survive a worker restart and retry with backoff.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Async execution</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 15 SCRAPING -->
+<section class="slide">
+  <p class="eyebrow">Backend · scraping engine</p>
+  <h2 class="title">httpx for speed, Selenium for truth, parsel for shape</h2>
+  <p class="lead">Two execution paths behind one contract, both forced through the same validating egress proxy.</p>
+
+  <div class="grid g3 mt22" style="gap:18px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">httpx 0.27</h3><span class="chip green">fast path</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>Async HTTP client with explicit timeouts and redirect limits.</li>
+        <li>Used when <span class="mono">render_js=false</span>; typically a fraction of a browser run.</li>
+        <li>Custom headers, user agent, proxy routing via the egress proxy.</li>
+        <li>Response status, final URL and redirect chain are recorded in the result.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Selenium 4.25</h3><span class="chip accent">browser path</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>Remote WebDriver against <span class="mono">standalone-chrome:4.25.0</span> in Selenium Grid.</li>
+        <li>Waits for a selector, captures screenshots and HTML.</li>
+        <li>Powers the automation step DSL: goto, click, type, wait, extract, screenshot.</li>
+        <li>Sessions are bounded and reaped; the API container never launches Chrome.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">parsel 1.9</h3><span class="chip cyan">extraction</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>CSS and XPath selectors over the fetched HTML.</li>
+        <li>Attribute extraction, multi-match lists, named result fields.</li>
+        <li>Page text, links and meta tags with hard limits.</li>
+        <li>Result is normalised to plain JSON for storage and export.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g-32 mt18" style="gap:20px;align-items:start">
+    <div class="card tight">
+      <div class="mini-title">SSRF defence in depth</div>
+      <ul class="clean" style="margin-top:7px">
+        <li><strong>Policy layer:</strong> scheme allow-list, port rules, private/link-local/loopback denial at request time.</li>
+        <li><strong>Validating proxy:</strong> resolves DNS, checks every address, then connects to the pinned IP — not the hostname.</li>
+        <li><strong>Chained upstreams:</strong> optional commercial proxies sit <em>behind</em> the validator, never around it.</li>
+      </ul>
+    </div>
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>real selector result</span></div>
+      <pre><span class="dim2">$</span> jq <span class="s">'.selectors'</span> result.json
+{
+  <span class="p">"author"</span>: <span class="s">"Albert Einstein"</span>,
+  <span class="p">"first_quote"</span>: <span class="s">"“The world as we have created it is a
+   process of our thinking. It cannot be changed
+   without changing our thinking.”"</span>
+}</pre>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Scraping engine</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 16 ARTIFACTS -->
+<section class="slide">
+  <p class="eyebrow">Backend · object storage</p>
+  <h2 class="title">Artifacts: boto3 over an S3-compatible API</h2>
+  <p class="lead">Screenshots and HTML are too large for a database row and too useful to lose. They live in object storage, addressed by row metadata.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div class="grid" style="gap:13px">
+      <div class="card tight">
+        <h3>boto3 1.35+</h3>
+        <p>Single S3 client configured by <span class="mono">ARTIFACTS_ENDPOINT</span>, bucket and credentials. Works against MinIO, AWS S3, or <span class="mono">adobe/s3mock</span> locally.</p>
+      </div>
+      <div class="card tight">
+        <h3>Write path</h3>
+        <p>Worker uploads <span class="mono">screenshot.png</span>, <span class="mono">page.html</span> and <span class="mono">result.json</span>, computes SHA-256, then inserts an <span class="mono">artifacts</span> row with content type, size and <span class="mono">expires_at</span>.</p>
+      </div>
+      <div class="card tight">
+        <h3>Read path</h3>
+        <p><span class="mono">GET /v1/artifacts/{id}/download</span> authorises the caller, then redirects to a short-lived presigned URL. The browser never sees storage credentials.</p>
+      </div>
+      <div class="card tight">
+        <h3>Retention</h3>
+        <p>Plan-dependent: 1 day on Free, 7 Starter, 30 Pro, 90 Business. The retention task deletes expired objects and rows.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="mini-title">Real artifacts from job <span class="mono">d59d6ef5…</span></div>
+      <table class="tbl" style="margin-top:8px">
+        <thead><tr><th>Kind</th><th>File</th><th>Size</th><th>SHA-256 (prefix)</th></tr></thead>
+        <tbody>
+          <tr><td class="k">result</td><td class="mono">result.json</td><td class="mono">2.1 KB</td><td class="mono">27906a08a7cf…</td></tr>
+          <tr><td class="k">html</td><td class="mono">page.html</td><td class="mono">11 KB</td><td class="mono">47c8812e633f…</td></tr>
+          <tr><td class="k">screenshot</td><td class="mono">screenshot.png</td><td class="mono">84 KB</td><td class="mono">54ebbeb9b150…</td></tr>
+        </tbody>
+      </table>
+
+      <div class="card tight mt14" style="background:#0b1220;border-color:#1c2a45">
+        <div class="mini-title" style="color:#7f92b1">download_url returned by the API</div>
+        <div class="mono" style="font-size:12.5px;color:#c8d6ee;margin-top:7px;line-height:1.6">
+          <span style="color:#93b4ff">/v1/artifacts</span>/2b6284ac-…/download<br>
+          <span style="color:#6f86a8">→ 307 redirect → presigned S3 URL</span>
+        </div>
+      </div>
+
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <p style="font-size:13px"><strong style="color:#0f172a">Local note:</strong> the pinned MinIO tag returned <span class="mono">401</span> from its registry in this environment, so the verified run used <span class="mono">adobe/s3mock</span>. The S3 code path and presigned redirects are identical; the official MinIO image/lifecycle remains unverified.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Artifact storage</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 17 SECURITY -->
+<section class="slide">
+  <p class="eyebrow">Backend · security</p>
+  <h2 class="title">Identity, secrets and egress are separate defences</h2>
+
+  <div class="grid g4 mt20" style="gap:14px">
+    <div class="card tight">
+      <span class="pill info">Authentication</span>
+      <h3 style="margin-top:9px">PyJWT 2.9</h3>
+      <p>Short-lived access tokens signed HS256; claims carry user, org and role. Refresh tokens rotate and are stored hashed.</p>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Passwords</span>
+      <h3 style="margin-top:9px">argon2-cffi</h3>
+      <p>Argon2id hashing with per-password salt. No plaintext, no reversible storage, constant-time verification.</p>
+    </div>
+    <div class="card tight">
+      <span class="pill info">API keys</span>
+      <h3 style="margin-top:9px">Pepper + SHA-256</h3>
+      <p>Keys are shown once. Only a hash with a server-side pepper is stored, so a database leak alone cannot replay them.</p>
+    </div>
+    <div class="card tight">
+      <span class="pill info">Secrets at rest</span>
+      <h3 style="margin-top:9px">cryptography 50</h3>
+      <p>Webhook signing secrets and proxy credentials are encrypted with Fernet before they reach PostgreSQL.</p>
+    </div>
+  </div>
+
+  <div class="grid g3 mt16" style="gap:14px">
+    <div class="card tight">
+      <h3>Authorisation</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li><strong>Roles:</strong> owner, admin, member.</li>
+        <li><strong>Scopes:</strong> <span class="mono">scrape:write</span>, <span class="mono">automation:write</span>, <span class="mono">jobs:read</span>, <span class="mono">schedules:write</span>, <span class="mono">exports:read</span>, <span class="mono">keys:manage</span>, <span class="mono">billing:manage</span>, <span class="mono">audit:read</span>.</li>
+        <li><strong>Enforcement:</strong> a dependency resolves the required scope before the handler runs.</li>
+        <li><strong>Audit:</strong> sensitive actions append to <span class="mono">audit_logs</span>.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>Session model</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>Access token kept <strong>in memory</strong> in the dashboard.</li>
+        <li>Refresh token in an <strong>httpOnly, same-site cookie</strong>.</li>
+        <li>Rotation on refresh; logout revokes the stored token.</li>
+        <li>No tokens in <span class="mono">localStorage</span>; the BFF keeps the browser same-origin.</li>
+      </ul>
+    </div>
+    <div class="card tight">
+      <h3>Egress control</h3>
+      <ul class="clean" style="margin-top:7px">
+        <li>Private, loopback, link-local and metadata ranges denied.</li>
+        <li>DNS resolved and validated at connect time.</li>
+        <li>Validated IP pinned to close rebinding.</li>
+        <li>Header and byte caps; hop-by-hop headers stripped.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card tight mt14" style="border-left:4px solid #4f46e5">
+    <p style="font-size:14px"><strong style="color:#0f172a">PII and logging:</strong> Sentry initialises with <span class="mono">send_default_pii=False</span>; structured logs carry identifiers, not secrets. <span class="mono">/metrics</span> can be disabled or protected with <span class="mono">METRICS_TOKEN</span>.</p>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Security model</span><span class="pagenum"></span></div>
+</section>

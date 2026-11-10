@@ -1,0 +1,297 @@
+<!-- 06 ARCHITECTURE -->
+<section class="slide">
+  <p class="eyebrow">Architecture</p>
+  <h2 class="title">Control plane and execution plane are deliberately separate</h2>
+
+  <div style="margin-top:20px">
+    <div class="lane-label">1 · Clients</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box" style="width:330px"><b>Next.js dashboard</b><small>Browser · React 19 · same-origin BFF</small></div>
+      <div class="arch-box" style="width:330px"><b>API consumers</b><small>curl · SDK · CI pipelines · JWT or API key</small></div>
+      <div class="arch-box" style="width:330px"><b>Cron schedules</b><small>Celery Beat fires due schedules</small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">2 · Edge &amp; control plane</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box cy" style="width:420px"><b>Next.js route handlers (BFF)</b><small>/api/auth/* · /api/proxy/[...path] · refresh cookie stays httpOnly</small></div>
+      <div class="arch-box acc" style="width:470px"><b>FastAPI ASGI application</b><small>auth · RBAC · quota · jobs API · artifacts · webhooks · metrics — <u>never launches Chrome</u></small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">3 · Durable state</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box gr" style="width:300px"><b>PostgreSQL 16</b><small>orgs, users, jobs, events, artifacts, ledger, schedules</small></div>
+      <div class="arch-box am" style="width:300px"><b>Redis 7</b><small>Celery broker · token buckets · idempotency · locks</small></div>
+      <div class="arch-box cy" style="width:300px"><b>S3-compatible storage</b><small>screenshots · HTML · JSON · presigned downloads</small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">4 · Async execution</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box acc" style="width:420px"><b>Celery worker (prefork)</b><small>scrape · automation · webhooks · retention · reaper · reconcile</small></div>
+      <div class="arch-box" style="width:400px"><b>Celery Beat</b><small>croniter schedules · periodic maintenance</small></div>
+    </div>
+
+    <div class="arrow-down" style="margin:7px 0">▼</div>
+
+    <div class="lane-label">5 · Egress</div>
+    <div class="row" style="gap:16px;justify-content:center">
+      <div class="arch-box" style="width:300px"><b>httpx + parsel</b><small>fast HTTP fetch · CSS/XPath extraction</small></div>
+      <div class="arch-box" style="width:300px"><b>Selenium Grid</b><small>standalone-chrome 4.25 · screenshots · JS pages</small></div>
+      <div class="arch-box am" style="width:300px"><b>Validating egress proxy</b><small>resolves, validates, pins IP · denies private ranges</small></div>
+    </div>
+  </div>
+
+  <div class="row mt18" style="gap:14px">
+    <div class="card tight" style="flex:1"><p style="font-size:13.5px"><strong style="color:#0f172a">Why split:</strong> an HTTP request can return in milliseconds while a 60-second browser job runs elsewhere. API restarts never kill running scrapes.</p></div>
+    <div class="card tight" style="flex:1"><p style="font-size:13.5px"><strong style="color:#0f172a">Why proxy-only egress:</strong> DNS is resolved and checked at connect time, then the validated IP is pinned — closing the rebinding window.</p></div>
+    <div class="card tight" style="flex:1"><p style="font-size:13.5px"><strong style="color:#0f172a">Production:</strong> the same topology sits behind Caddy 2.8 with automatic TLS in <span class="mono">deploy/compose.prod.yml</span>.</p></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> System architecture</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 07 REQUEST LIFECYCLE -->
+<section class="slide">
+  <p class="eyebrow">End-to-end flow</p>
+  <h2 class="title">What happens when a user submits a scrape</h2>
+  <p class="lead">The real job used throughout this deck: <span class="mono" style="font-size:15px">POST /v1/scrape</span> → <span class="mono" style="font-size:15px">quotes.toscrape.com</span>, <span class="mono" style="font-size:15px">render_js=true</span>, screenshot + HTML.</p>
+
+  <div class="grid g2 mt24" style="gap:22px">
+    <div class="grid" style="gap:13px">
+      <div class="step"><span class="num">1</span><div class="body"><h4>Authenticate &amp; authorize</h4><p>JWT bearer or hashed API key → membership → role → required scope (<span class="mono">scrape:write</span>). Audit log written.</p></div></div>
+      <div class="step"><span class="num">2</span><div class="body"><h4>Validate the payload</h4><p>Pydantic v2 schema: absolute http(s) URL, selector map, timeout bounds, extraction limits, plan caps.</p></div></div>
+      <div class="step"><span class="num">3</span><div class="body"><h4>SSRF pre-check &amp; quota reserve</h4><p>URL validated against the SSRF policy; credits reserved in the usage ledger; rate-limit bucket consumed atomically in Redis.</p></div></div>
+      <div class="step"><span class="num">4</span><div class="body"><h4>Persist and enqueue</h4><p>Job row committed as <span class="pill info">queued</span>; Celery task published; API returns <span class="mono">202</span> with the job id and a dedup flag.</p></div></div>
+      <div class="step"><span class="num">5</span><div class="body"><h4>Execute in the worker</h4><p>httpx fetch or Selenium Grid browser run through the validating egress proxy. Hard timeout is enforced.</p></div></div>
+    </div>
+
+    <div class="grid" style="gap:13px">
+      <div class="step"><span class="num" style="background:#0891b2">6</span><div class="body"><h4>Extract</h4><p>parsel applies CSS/XPath selectors, page text, links and meta limits; the payload is normalised to JSON.</p></div></div>
+      <div class="step"><span class="num" style="background:#0891b2">7</span><div class="body"><h4>Store artifacts</h4><p>screenshot.png, page.html and result.json uploaded through boto3, hashed with SHA-256 and given a retention expiry.</p></div></div>
+      <div class="step"><span class="num" style="background:#0891b2">8</span><div class="body"><h4>Finalise</h4><p>Job marked <span class="pill ok">succeeded</span> with duration; events appended; webhook delivery queued in the outbox.</p></div></div>
+      <div class="step"><span class="num" style="background:#0891b2">9</span><div class="body"><h4>Consume</h4><p>The dashboard polls <span class="mono">/v1/jobs/{id}</span> every 5 s; artifacts download through short-lived presigned URLs.</p></div></div>
+
+      <div class="term mt8">
+        <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>observed timeline</span></div>
+        <pre><span class="dim2">$</span> curl -X POST /v1/scrape ...
+<span class="ok">202</span> {"job":{"status":"queued", ...}}
+
+<span class="dim2">poll 1</span>  <span class="ok">succeeded</span>   duration_ms: <span class="p">7406</span>
+<span class="dim2">result.title</span>       "Quotes to Scrape"
+<span class="dim2">artifacts</span>          result.json · page.html · screenshot.png</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Request lifecycle</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 08 STACK AT A GLANCE -->
+<section class="slide">
+  <p class="eyebrow">Stack at a glance</p>
+  <h2 class="title">Every layer, language and tool</h2>
+
+  <table class="tbl tall mt18">
+    <thead>
+      <tr><th style="width:15%">Layer</th><th style="width:12%">Language</th><th style="width:30%">Technology</th><th style="width:16%">Version</th><th>Role</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="k">API control plane</td><td>Python</td><td>FastAPI · Starlette · Uvicorn</td><td class="mono">0.162 · 1.10 · 0.32</td><td>ASGI HTTP API, DI, OpenAPI, async jobs</td></tr>
+      <tr><td class="k">Validation &amp; config</td><td>Python</td><td>Pydantic v2 · pydantic-settings</td><td class="mono">2.9+ · 2.5+</td><td>Typed request/response models, env settings</td></tr>
+      <tr><td class="k">Persistence</td><td>SQL</td><td>SQLAlchemy 2 async · asyncpg · Alembic · PostgreSQL</td><td class="mono">2.0 · 0.30 · 1.14 · 16</td><td>ORM, async driver, migrations, relational truth</td></tr>
+      <tr><td class="k">Job queue</td><td>Python</td><td>Celery[redis] · redis-py · croniter</td><td class="mono">5.4 · 5.2 · 3.0</td><td>Durable workers, broker, cron schedules</td></tr>
+      <tr><td class="k">Scraping engine</td><td>Python</td><td>httpx · parsel · Selenium</td><td class="mono">0.27 · 1.9 · 4.25</td><td>HTTP fetch, CSS/XPath, real browser</td></tr>
+      <tr><td class="k">Artifacts</td><td>Python</td><td>boto3 · S3 API (MinIO / s3mock)</td><td class="mono">1.35+</td><td>Uploads, SHA-256, presigned downloads</td></tr>
+      <tr><td class="k">Security</td><td>Python</td><td>PyJWT · argon2-cffi · cryptography</td><td class="mono">2.9 · 23.1 · 50</td><td>Tokens, password hashing, secret encryption</td></tr>
+      <tr><td class="k">Observability</td><td>Python</td><td>structlog · prometheus-client · sentry-sdk</td><td class="mono">24.4 · 0.20 · 2.14</td><td>JSON logs, metrics, error reporting</td></tr>
+      <tr><td class="k">Dashboard</td><td>TypeScript</td><td>Next.js · React · Tailwind CSS</td><td class="mono">16.4.5 · 19.3.1 · 4.3.4</td><td>App Router UI, BFF, styling</td></tr>
+      <tr><td class="k">Frontend tooling</td><td>TypeScript / JS</td><td>ESLint · Vitest · Playwright · Vite</td><td class="mono">9.39 · 5.1 · 1.65 · 8.3</td><td>Lint, unit tests, E2E, test runner core</td></tr>
+      <tr><td class="k">Runtime &amp; infra</td><td>YAML / HCL-free</td><td>Docker Compose v2 · Caddy · Bash · PowerShell</td><td class="mono">v2 · 2.8 · 3.2+ / 5.1+</td><td>Local + prod topology, TLS, one-command runners</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer"><span><span class="dot">●</span> Technology stack</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 09 LANGUAGES -->
+<section class="slide">
+  <p class="eyebrow">Languages</p>
+  <h2 class="title">Python for the engine, TypeScript for the cockpit</h2>
+  <p class="lead">Deliberate split: heavy I/O and scraping live in Python; the UI and BFF share one typed language.</p>
+
+  <div class="grid g3 mt24" style="gap:18px">
+    <div class="card">
+      <div class="row"><span class="pill info">Backend</span><span class="mini-title">14,098 LOC · 95 files</span></div>
+      <h3 style="margin-top:10px;font-size:22px">Python 3.12</h3>
+      <p style="margin-top:4px">Pinned to <span class="mono">>=3.12,&lt;3.13</span> in <span class="mono">pyproject.toml</span>.</p>
+      <ul class="clean" style="margin-top:10px">
+        <li><strong>Async first:</strong> native <span class="mono">async/await</span> for FastAPI, asyncpg and httpx.</li>
+        <li><strong>Ecosystem:</strong> Selenium, parsel, boto3, Celery are mature here.</li>
+        <li><strong>Typing:</strong> full annotations checked by mypy in strict-ish mode.</li>
+        <li><strong>Performance:</strong> I/O-bound work, so the GIL is not the bottleneck.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="pill info">Frontend</span><span class="mini-title">5,477 LOC · TS/TSX</span></div>
+      <h3 style="margin-top:10px;font-size:22px">TypeScript 5.9</h3>
+      <p style="margin-top:4px">Strict config, <span class="mono">noEmit</span> typecheck in CI.</p>
+      <ul class="clean" style="margin-top:10px">
+        <li><strong>Contracts:</strong> job, artifact, schedule and webhook types mirror the API.</li>
+        <li><strong>Safety:</strong> discriminated unions for job status and automation steps.</li>
+        <li><strong>Ergonomics:</strong> same language in React components and server route handlers.</li>
+        <li><strong>Compile-time only:</strong> no runtime overhead in the browser.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="pill info">Supporting</span><span class="mini-title">glue &amp; infrastructure</span></div>
+      <h3 style="margin-top:10px;font-size:22px">SQL · YAML · Bash · PowerShell</h3>
+      <ul class="clean" style="margin-top:10px">
+        <li><strong>SQL:</strong> Alembic migrations and PostgreSQL DDL; indexes and constraints do real work.</li>
+        <li><strong>YAML:</strong> Compose dev/prod topology, CI workflow, alert rules.</li>
+        <li><strong>Bash 3.2+:</strong> <span class="mono">run.sh</span> + <span class="mono">run-macos.sh</span> for Linux/macOS.</li>
+        <li><strong>PowerShell 5.1+:</strong> <span class="mono">run.ps1</span> + <span class="mono">run.cmd</span> for native Windows.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g4 mt18" style="gap:14px">
+    <div class="card tight"><div class="kpi"><span class="v">3.12</span><span class="l">Python, pinned minor</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">5.9</span><span class="l">TypeScript</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">2</span><span class="l">Languages in app code</span></div></div>
+    <div class="card tight"><div class="kpi"><span class="v">100%</span><span class="l">Type-annotated app code</span></div></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Language choices</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 10 PACKAGE MANAGERS -->
+<section class="slide">
+  <p class="eyebrow">Package managers</p>
+  <h2 class="title"><span class="mono">uv</span> on the backend, <span class="mono">npm</span> on the frontend</h2>
+  <p class="lead">Both lock the full dependency graph. Neither relies on a globally installed toolchain.</p>
+
+  <div class="grid g2 mt22" style="gap:20px">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="font-size:21px;margin:0"><span class="mono">uv</span> — Python</h3><span class="chip accent">backend</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>One tool:</strong> resolves, installs, locks and runs — replaces pip, pip-tools, virtualenv and tox.</li>
+        <li><strong>Reproducible:</strong> <span class="mono">uv.lock</span> pins every transitive package with hashes.</li>
+        <li><strong>Version pin:</strong> <span class="mono">requires-python = ">=3.12,&lt;3.13"</span>; <span class="mono">.python-version</span> keeps machines aligned.</li>
+        <li><strong>Dependency groups:</strong> the app, <span class="mono">dev</span> (pytest, ruff, mypy, respx, pip-audit) and <span class="mono">e2e</span> (locust) install independently.</li>
+        <li><strong>Same in Docker:</strong> images use <span class="mono">uv sync --frozen</span>, so local and container builds match.</li>
+      </ul>
+      <pre class="code mt14"><span class="c"># everyday commands</span>
+uv sync                    <span class="c"># install exactly the lockfile</span>
+uv run pytest -q           <span class="c"># run inside the project env</span>
+uv run ruff check apps packages tests
+uv add <span class="s">"httpx"</span>             <span class="c"># update pyproject + lock</span></pre>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h3 style="font-size:21px;margin:0"><span class="mono">npm</span> — Node.js</h3><span class="chip cyan">frontend</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Bundled with Node 22:</strong> no extra version manager needed to start.</li>
+        <li><strong>Lockfile:</strong> <span class="mono">package-lock.json</span> pins the tree; <span class="mono">npm ci</span> is used for clean installs.</li>
+        <li><strong>Scripts as interface:</strong> <span class="mono">dev</span>, <span class="mono">build</span>, <span class="mono">start</span>, <span class="mono">lint</span>, <span class="mono">typecheck</span>, <span class="mono">test</span>, <span class="mono">e2e</span>.</li>
+        <li><strong>Exact versions:</strong> no <span class="mono">^</span> ranges for the app runtime — Next, React and tooling are pinned.</li>
+        <li><strong>Docker:</strong> the web image builds with the same lockfile and runs <span class="mono">node server.js</span>.</li>
+      </ul>
+      <pre class="code mt14"><span class="c"># scripts in apps/web/package.json</span>
+npm ci
+npm run lint
+npm run typecheck
+npm test        <span class="c"># vitest run</span>
+npm run build   <span class="c"># next build</span></pre>
+    </div>
+  </div>
+
+  <div class="grid g4 mt16" style="gap:12px">
+    <div class="card tight"><div class="mini-title">Python lock</div><div class="mono" style="font-size:14px;margin-top:4px">uv.lock</div></div>
+    <div class="card tight"><div class="mini-title">Node lock</div><div class="mono" style="font-size:14px;margin-top:4px">package-lock.json</div></div>
+    <div class="card tight"><div class="mini-title">Service images</div><div class="mono" style="font-size:14px;margin-top:4px">postgres:16 · redis:7</div></div>
+    <div class="card tight"><div class="mini-title">Browser image</div><div class="mono" style="font-size:14px;margin-top:4px">standalone-chrome:4.25</div></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Package management</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 11 BACKEND MAP -->
+<section class="slide">
+  <p class="eyebrow">Backend libraries</p>
+  <h2 class="title">The Python stack, group by group</h2>
+  <p class="lead">Declared in <span class="mono">scrapeflow/pyproject.toml</span>; every group below is exercised by the test suite.</p>
+
+  <div class="grid g4 mt20" style="gap:13px">
+    <div class="card tight">
+      <div class="mini-title">HTTP / API</div>
+      <h3 style="margin-top:6px">Web layer</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">fastapi<br>starlette<br>uvicorn[standard]</p>
+      <p style="margin-top:6px">Routing, DI, ASGI serving, request lifecycle.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Validation</div>
+      <h3 style="margin-top:6px">Schemas</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">pydantic&gt;=2.9<br>pydantic-settings<br>email-validator</p>
+      <p style="margin-top:6px">Request/response models, env config, email types.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Data</div>
+      <h3 style="margin-top:6px">Persistence</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">sqlalchemy[asyncio]<br>asyncpg<br>alembic</p>
+      <p style="margin-top:6px">ORM, async PostgreSQL driver, versioned migrations.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Queue</div>
+      <h3 style="margin-top:6px">Async work</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">celery[redis]<br>redis&gt;=5.2<br>croniter</p>
+      <p style="margin-top:6px">Workers, broker/client, cron expression evaluation.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Scraping</div>
+      <h3 style="margin-top:6px">Fetch &amp; parse</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">httpx<br>parsel<br>selenium</p>
+      <p style="margin-top:6px">HTTP client, CSS/XPath engine, WebDriver protocol.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Storage</div>
+      <h3 style="margin-top:6px">Artifacts</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">boto3&gt;=1.35</p>
+      <p style="margin-top:6px">S3 uploads, metadata, presigned URL generation.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Security</div>
+      <h3 style="margin-top:6px">Identity</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">PyJWT<br>argon2-cffi<br>cryptography</p>
+      <p style="margin-top:6px">Signed tokens, password hashing, encrypted secrets.</p>
+    </div>
+    <div class="card tight">
+      <div class="mini-title">Ops</div>
+      <h3 style="margin-top:6px">Observability</h3>
+      <p class="mono" style="font-size:12.5px;line-height:1.7">structlog<br>prometheus-client<br>sentry-sdk[fastapi]</p>
+      <p style="margin-top:6px">Structured logs, metrics registry, exception capture.</p>
+    </div>
+  </div>
+
+  <div class="grid g3 mt16" style="gap:13px">
+    <div class="card tight" style="border-left:4px solid #4f46e5">
+      <p style="font-size:13.5px"><strong style="color:#0f172a">Billing:</strong> <span class="mono">stripe&gt;=11,&lt;15</span> for checkout sessions, the customer portal and signed webhook events.</p>
+    </div>
+    <div class="card tight" style="border-left:4px solid #0891b2">
+      <p style="font-size:13.5px"><strong style="color:#0f172a">Test-only:</strong> pytest 9, pytest-asyncio, pytest-cov, respx, ruff, mypy, pip-audit, locust (e2e group).</p>
+    </div>
+    <div class="card tight" style="border-left:4px solid #059669">
+      <p style="font-size:13.5px"><strong style="color:#0f172a">Guardrail:</strong> <span class="mono">pip-audit</span> scans the resolved lock for known CVEs; mypy checks 94 source files.</p>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Backend stack map</span><span class="pagenum"></span></div>
+</section>

@@ -1,0 +1,10 @@
+NAME                        IMAGE                                                                     COMMAND                  SERVICE        CREATED        STATUS                    PORTS
+scrapeflow-api-1            sha256:830ca92d005b582ebba608358b18d7826c3dc12e012c8d760d446df700860d2a   "/usr/bin/tini -- uv…"   api            13 hours ago   Up 21 minutes (healthy)   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+scrapeflow-beat-1           sha256:f39d124a76ed5b05e6ea357d745eadf191993a9732afb6874dcdafe33c7a3e38   "/usr/bin/tini -- ce…"   beat           13 hours ago   Up 21 minutes             8000/tcp
+scrapeflow-egress-proxy-1   sha256:0ac4836a3d5e1d5b2068753fe25eafea9fd20e5aae24b92269a3058c0c50cdaa   "/usr/bin/tini -- py…"   egress-proxy   13 hours ago   Up 21 minutes             8000/tcp, 8888/tcp
+scrapeflow-minio-1          adobe/s3mock:latest                                                       "/cnb/process/web"       minio          19 hours ago   Up 4 minutes (healthy)    127.0.0.1:9000-9001->9000-9001/tcp
+scrapeflow-postgres-1       postgres:16-alpine                                                        "docker-entrypoint.s…"   postgres       19 hours ago   Up 4 minutes (healthy)    5432/tcp
+scrapeflow-redis-1          redis:7-alpine                                                            "docker-entrypoint.s…"   redis          19 hours ago   Up 4 minutes (healthy)    6379/tcp
+scrapeflow-selenium-1       selenium/standalone-chrome:4.25.0                                         "/opt/bin/entry_poin…"   selenium       19 hours ago   Up 4 minutes              127.0.0.1:4444->4444/tcp, 5900/tcp
+scrapeflow-web-1            sha256:049e944dab73bdefc6f036535829698393246f27b7ed81ebc7b3865ca5a512d5   "node server.js"         web            19 hours ago   Up 21 minutes (healthy)   0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+scrapeflow-worker-1         sha256:becdfa21c60b235e0c146f574eeb4d29858583f2a830c9ca1f4be8aaf82d9b0d   "/usr/bin/tini -- ce…"   worker         13 hours ago   Up 21 minutes             8000/tcp, 9101/tcp

@@ -1,0 +1,262 @@
+<!-- 24 AUTH SCREENS -->
+<section class="slide">
+  <p class="eyebrow">Live dashboard · onboarding</p>
+  <h2 class="title">Sign-up creates an organisation; sign-in restores a session</h2>
+  <p class="lead">Captured from the running stack at <span class="mono">127.0.0.1:3000</span>, against real PostgreSQL and Redis.</p>
+
+  <div class="grid g2 mt22" style="gap:22px;align-items:start">
+    <div>
+      <div class="shot">
+        <img src="assets/01-login.png" alt="ScrapeFlow sign in page" />
+        <div class="cap"><span><span class="mono">/login</span></span><span>email · password · optional org slug</span></div>
+      </div>
+      <div class="card tight mt12">
+        <ul class="clean" style="margin:0">
+          <li><strong>Org slug is optional:</strong> only needed when one identity belongs to more than one organisation.</li>
+          <li><strong>No token in storage:</strong> the refresh cookie is set by the server route handler.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div>
+      <div class="shot">
+        <img src="assets/02-signup.png" alt="ScrapeFlow sign up page" />
+        <div class="cap"><span><span class="mono">/signup</span></span><span>creates org + owner + free plan</span></div>
+      </div>
+      <div class="card tight mt12">
+        <ul class="clean" style="margin:0">
+          <li><strong>Tos gate:</strong> the request carries <span class="mono">tos_accepted: true</span> and the API validates it.</li>
+          <li><strong>Owner role:</strong> the first user gets the owner membership and the free plan with 100 credits.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Onboarding screens</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 25 JOBS + SCRAPE -->
+<section class="slide">
+  <p class="eyebrow">Live dashboard · daily use</p>
+  <h2 class="title">The job list and the scrape builder</h2>
+  <p class="lead">One real succeeded job is visible: <span class="mono">quotes.toscrape.com</span>, 7.4 seconds, screenshot and HTML requested.</p>
+
+  <div class="grid g2 mt20" style="gap:20px;align-items:start">
+    <div>
+      <div class="shot">
+        <img src="assets/04-jobs.png" alt="Jobs list" />
+        <div class="cap"><span><span class="mono">/jobs</span> · active jobs refresh every 5 s</span><span>1–1 of 1</span></div>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">What the list exposes</div>
+        <p style="margin-top:6px;font-size:13.5px">Status badge, kind, URL, created time, duration and short job id. Filters by status, pagination, and quick actions to start a new scrape or automation.</p>
+      </div>
+    </div>
+    <div>
+      <div class="shot">
+        <img src="assets/06-automate.png" alt="Automation builder" />
+        <div class="cap"><span><span class="mono">/automate</span> · typed step builder</span><span>browser-only</span></div>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">The scrape builder, by contrast</div>
+        <p style="margin-top:6px;font-size:13.5px">The scrape form is declarative: URL, selectors, extraction options, screenshot/HTML flags, proxy country, timeout and webhook — with a live JSON preview of the exact request body.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Dashboard · jobs and automation</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 26 SECONDARY SCREENS -->
+<section class="slide">
+  <p class="eyebrow">Live dashboard · operations</p>
+  <h2 class="title">Schedules, API keys and billing</h2>
+  <p class="lead">Four more screens, captured from the same session. Each is wired to real endpoints, not static mock data.</p>
+
+  <div class="grid g2 mt18" style="gap:16px">
+    <div class="shot crop">
+      <img src="assets/07-schedules.png" alt="Schedules page" />
+      <div class="cap"><span><span class="mono">/schedules</span> · cron + run history</span><span>croniter validated</span></div>
+    </div>
+    <div class="shot crop">
+      <img src="assets/08-api-keys.png" alt="API keys page" />
+      <div class="cap"><span><span class="mono">/keys</span> · scopes + one-time reveal</span><span>hashed at rest</span></div>
+    </div>
+  </div>
+
+  <div class="grid g2 mt14" style="gap:16px">
+    <div class="shot crop">
+      <img src="assets/09-billing.png" alt="Billing page" />
+      <div class="cap"><span><span class="mono">/billing</span> · plans + usage</span><span>Stripe integration (unverified live)</span></div>
+    </div>
+    <div class="card">
+      <h3>What each screen proves</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li><strong>Schedules:</strong> cron expressions are validated server-side and every fire is recorded.</li>
+        <li><strong>API keys:</strong> scoped keys are created once and stored hashed; the secret is never shown again.</li>
+        <li><strong>Billing:</strong> plan catalog, credit balance and usage are read from the API; checkout requires live Stripe keys.</li>
+        <li><strong>Consistency:</strong> all four share the same shell, auth context and error handling.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Dashboard · operations</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 27 JOB DETAIL -->
+<section class="slide">
+  <p class="eyebrow">Live artifact · job detail</p>
+  <h2 class="title">A real job, end to end</h2>
+  <p class="lead">Job <span class="mono" style="font-size:15px">d59d6ef5-1868-4e10-8999-96e762cfdc6e</span> — queued and succeeded in <strong>7.4 s</strong> with attempt 1 of 2.</p>
+
+  <div class="grid g2 mt18" style="gap:18px;align-items:start">
+    <div class="shot">
+      <img src="assets/10-job-detail.png" alt="Job detail page showing metadata, result JSON and artifacts" style="height:480px;object-fit:cover;object-position:top" />
+      <div class="cap"><span>Run metadata + result JSON</span><span>status: succeeded</span></div>
+    </div>
+    <div>
+      <pre class="code" style="font-size:12.5px"><span class="c"># page.html (excerpt, real artifact · 11 KB)</span>
+<span class="p">&lt;html</span> lang=<span class="s">"en"</span><span class="p">&gt;&lt;head&gt;</span>
+  <span class="p">&lt;meta</span> charset=<span class="s">"UTF-8"</span><span class="p">&gt;</span>
+  <span class="p">&lt;title&gt;</span>Quotes to Scrape<span class="p">&lt;/title&gt;</span>
+<span class="p">&lt;/head&gt;&lt;body&gt;</span>
+  <span class="p">&lt;div</span> class=<span class="s">"quote"</span> itemscope<span class="p">&gt;</span>
+    <span class="p">&lt;span</span> class=<span class="s">"text"</span><span class="p">&gt;</span>“The world as we have
+      created it is a process of our thinking…”<span class="p">&lt;/span&gt;</span>
+    <span class="p">&lt;small</span> class=<span class="s">"author"</span><span class="p">&gt;</span>Albert Einstein<span class="p">&lt;/small&gt;</span></pre>
+
+      <div class="shot mt12">
+        <img src="assets/11-job-artifacts.png" alt="Job artifacts card with screenshot preview and downloads" style="height:262px;object-fit:cover;object-position:bottom" />
+        <div class="cap"><span>Artifacts card · inline image preview</span><span>download via presigned URL</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g3 mt14" style="gap:12px">
+    <div class="card tight"><div class="mini-title">Result title</div><p style="margin-top:4px;font-size:14px"><strong style="color:#0f172a">Quotes to Scrape</strong></p></div>
+    <div class="card tight"><div class="mini-title">Selector: author</div><p style="margin-top:4px;font-size:14px"><strong style="color:#0f172a">Albert Einstein</strong></p></div>
+    <div class="card tight"><div class="mini-title">Artifacts</div><p style="margin-top:4px;font-size:14px"><strong style="color:#0f172a">3 files</strong> · screenshot, HTML, JSON</p></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Job detail artifact</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 28 ARTIFACT DEEP DIVE -->
+<section class="slide">
+  <p class="eyebrow">Live artifact · raw output</p>
+  <h2 class="title">What the browser actually returned</h2>
+  <p class="lead">The screenshot is the page as Chrome rendered it after JavaScript; the JSON is the extracted payload. Both were downloaded from object storage.</p>
+
+  <div class="grid g2 mt18" style="gap:20px;align-items:start">
+    <div>
+      <div class="shot">
+        <img src="assets/screenshot.png" alt="Screenshot artifact of quotes.toscrape.com rendered by Chrome" />
+        <div class="cap"><span><span class="mono">screenshot.png</span> · 1366 × 629 · 84 KB</span><span>Chrome · Selenium Grid</span></div>
+      </div>
+      <div class="row mt12" style="gap:8px;flex-wrap:wrap">
+        <span class="chip green">SHA-256 verified</span>
+        <span class="chip cyan">content_type image/png</span>
+        <span class="chip">expires_at set</span>
+      </div>
+    </div>
+
+    <div>
+      <pre class="code" style="font-size:12.5px;max-height:330px"><span class="c"># result.json (excerpt, real artifact)</span>
+{
+  <span class="p">"elapsed_ms"</span>: 2682,
+  <span class="p">"proxy"</span>: <span class="k">null</span>,
+  <span class="p">"redirects"</span>: [],
+  <span class="p">"render_js"</span>: <span class="k">true</span>,
+  <span class="p">"selectors"</span>: {
+    <span class="p">"author"</span>: <span class="s">"Albert Einstein"</span>,
+    <span class="p">"first_quote"</span>: <span class="s">"“The world as we have created it is a
+      process of our thinking. It cannot be changed
+      without changing our thinking.”"</span>
+  },
+  <span class="p">"status_code"</span>: <span class="k">null</span>,
+  <span class="p">"text"</span>: <span class="s">"Quotes to Scrape Login “The world as we
+    have created it is a process of our thinking…”"</span>
+}</pre>
+
+      <div class="card tight mt12">
+        <div class="mini-title">Three artifacts, three jobs</div>
+        <ul class="clean" style="margin-top:6px">
+          <li><strong>screenshot.png:</strong> visual proof for humans and change detection.</li>
+          <li><strong>page.html:</strong> the rendered DOM for offline re-parsing and debugging.</li>
+          <li><strong>result.json:</strong> the machine-readable extraction your pipeline consumes.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Artifact deep dive</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 29 API SURFACE -->
+<section class="slide">
+  <p class="eyebrow">API surface</p>
+  <h2 class="title">29 documented routes, generated from the code</h2>
+  <p class="lead">The OpenAPI schema is not hand-maintained: it is built from FastAPI routes and Pydantic models, then served at <span class="mono">/docs</span>.</p>
+
+  <div class="grid g-32 mt18" style="gap:20px;align-items:start">
+    <div>
+      <table class="tbl">
+        <thead><tr><th style="width:26%">Group</th><th>Endpoints</th></tr></thead>
+        <tbody>
+          <tr><td class="k">System</td><td class="mono" style="font-size:12.5px">GET /health · GET /ready</td></tr>
+          <tr><td class="k">Auth</td><td class="mono" style="font-size:12.5px">POST /v1/auth/signup · login · refresh · logout · GET /v1/auth/me</td></tr>
+          <tr><td class="k">Scrape</td><td class="mono" style="font-size:12.5px">POST /v1/scrape</td></tr>
+          <tr><td class="k">Automation</td><td class="mono" style="font-size:12.5px">POST /v1/automate</td></tr>
+          <tr><td class="k">Jobs</td><td class="mono" style="font-size:12.5px">GET /v1/jobs · GET /v1/jobs/{id} · cancel · events · export</td></tr>
+          <tr><td class="k">Artifacts</td><td class="mono" style="font-size:12.5px">GET /v1/jobs/{id}/artifacts · GET /v1/artifacts/{id}/download</td></tr>
+          <tr><td class="k">Keys</td><td class="mono" style="font-size:12.5px">GET/POST /v1/keys · PATCH/DELETE /v1/keys/{id}</td></tr>
+          <tr><td class="k">Schedules</td><td class="mono" style="font-size:12.5px">CRUD · run · runs · history · export</td></tr>
+          <tr><td class="k">Webhooks</td><td class="mono" style="font-size:12.5px">CRUD · deliveries · rotate-secret</td></tr>
+          <tr><td class="k">Billing</td><td class="mono" style="font-size:12.5px">checkout · portal · plans · usage · webhook</td></tr>
+        </tbody>
+      </table>
+      <div class="card tight mt12">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Async by design:</strong> creation endpoints return <span class="mono">202</span> and a job id. Clients poll or wait for a webhook — the HTTP connection is never held open for a browser run.</p>
+      </div>
+    </div>
+
+    <div class="shot">
+      <img src="assets/03-api-docs.png" alt="Swagger UI for the ScrapeFlow API" />
+      <div class="cap"><span><span class="mono">127.0.0.1:8000/docs</span></span><span>OpenAPI 3.1</span></div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> API surface</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 30 DOCKER TOPOLOGY -->
+<section class="slide">
+  <p class="eyebrow">Infrastructure · local</p>
+  <h2 class="title">Eleven services in one Compose file</h2>
+  <p class="lead">One command builds and starts everything, waits for readiness, and prints the URLs.</p>
+
+  <table class="tbl mt16">
+    <thead><tr><th style="width:16%">Service</th><th style="width:26%">Image</th><th style="width:12%">Port</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td class="k">web</td><td class="mono">apps/web Dockerfile</td><td class="mono">3000</td><td>Next.js dashboard and BFF, production build</td></tr>
+      <tr><td class="k">api</td><td class="mono">apps/api Dockerfile</td><td class="mono">8000</td><td>FastAPI control plane, OpenAPI, metrics</td></tr>
+      <tr><td class="k">worker</td><td class="mono">same backend image</td><td class="mono">9101</td><td>Celery prefork workers, scrape + automation</td></tr>
+      <tr><td class="k">beat</td><td class="mono">same backend image</td><td>—</td><td>Celery Beat scheduler, schedule file on tmpfs</td></tr>
+      <tr><td class="k">migrate</td><td class="mono">same backend image</td><td>—</td><td>one-shot <span class="mono">alembic upgrade head</span>, exits 0</td></tr>
+      <tr><td class="k">egress-proxy</td><td class="mono">same backend image</td><td class="mono">8888</td><td>validating HTTP/CONNECT proxy with IP pinning</td></tr>
+      <tr><td class="k">postgres</td><td class="mono">postgres:16-alpine</td><td class="mono">5432</td><td>durable relational state, named volume</td></tr>
+      <tr><td class="k">redis</td><td class="mono">redis:7-alpine</td><td class="mono">6379</td><td>broker, token buckets, idempotency</td></tr>
+      <tr><td class="k">minio</td><td class="mono">quay.io/minio/minio</td><td class="mono">9000/9001</td><td>S3-compatible artifact store (s3mock fallback)</td></tr>
+      <tr><td class="k">minio-init</td><td class="mono">python helper</td><td>—</td><td>creates the bucket, exits 0</td></tr>
+      <tr><td class="k">selenium</td><td class="mono">standalone-chrome:4.25.0</td><td class="mono">4444</td><td>headless Chrome pool for real browser runs</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g3 mt12" style="gap:12px">
+    <div class="card tight"><div class="mini-title">Volumes</div><p style="margin-top:4px;font-size:13px" class="mono">pgdata · redisdata · miniodata</p></div>
+    <div class="card tight"><div class="mini-title">Network</div><p style="margin-top:4px;font-size:13px">single <span class="mono">app_net</span> bridge; only 3000/8000/9000/4444 bound to host</p></div>
+    <div class="card tight"><div class="mini-title">Health</div><p style="margin-top:4px;font-size:13px">pg_isready, redis-cli ping, api /ready, web /login</p></div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Docker topology</span><span class="pagenum"></span></div>
+</section>

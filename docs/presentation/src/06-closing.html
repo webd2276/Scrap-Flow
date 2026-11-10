@@ -1,0 +1,332 @@
+<!-- 31 PRODUCTION -->
+<section class="slide">
+  <p class="eyebrow">Infrastructure · production</p>
+  <h2 class="title">Same topology, one TLS edge, explicit runbook</h2>
+  <p class="lead"><span class="mono">deploy/compose.prod.yml</span> reuses the backend image, adds Caddy 2.8 and removes host-exposed dev ports.</p>
+
+  <div class="grid g-32 mt20" style="gap:22px;align-items:start">
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Edge</div>
+        <h3 style="margin-top:5px">Caddy 2.8</h3>
+        <p>Automatic HTTPS certificates, reverse proxy to <span class="mono">web</span> and <span class="mono">api</span>, HTTP→HTTPS redirect. Only 80/443 are published.</p>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Data</div>
+        <h3 style="margin-top:5px">Named volumes + backups</h3>
+        <p>PostgreSQL, Redis and MinIO volumes persist across deploys. The runbook covers <span class="mono">pg_dump</span>/restore, volume backup and a tested rollback path.</p>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Deploy</div>
+        <h3 style="margin-top:5px">Image-based</h3>
+        <p><span class="mono">SCRAPEFLOW_IMAGE</span> selects the backend tag; <span class="mono">migrate</span> runs before API/worker start; rollback is a tag change plus a migration check.</p>
+      </div>
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Not started here:</strong> the production Caddy topology needs a real domain and DNS. It is committed and documented, but <strong>not verified live</strong> in this environment.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="term">
+        <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>deploy/compose.prod.yml · services</span></div>
+        <pre>caddy          <span class="dim2"># TLS + reverse proxy, ports 80/443</span>
+api            <span class="dim2"># uvicorn, no host port</span>
+web            <span class="dim2"># next start, no host port</span>
+worker         <span class="dim2"># celery prefork</span>
+beat           <span class="dim2"># scheduler</span>
+migrate        <span class="dim2"># alembic upgrade head (one-shot)</span>
+egress-proxy   <span class="dim2"># validating forward proxy</span>
+postgres       <span class="dim2"># 16-alpine + pgdata</span>
+redis          <span class="dim2"># 7-alpine + redisdata</span>
+minio          <span class="dim2"># S3 store + miniodata</span>
+minio-init     <span class="dim2"># bucket bootstrap</span>
+selenium       <span class="dim2"># standalone-chrome</span></pre>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Runbook coverage</div>
+        <ul class="clean" style="margin-top:6px">
+          <li>Start, stop, scale workers, rotate secrets.</li>
+          <li>Backup and restore PostgreSQL; verify object storage.</li>
+          <li>Rollback an image tag and confirm migrations.</li>
+          <li>Incident triage: <span class="mono">/ready</span>, logs, queue depth, reaper.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Production topology</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 32 RUNNERS -->
+<section class="slide">
+  <p class="eyebrow">Developer experience</p>
+  <h2 class="title">One command on Linux, macOS and Windows</h2>
+  <p class="lead">Four entry points, identical subcommands. The macOS wrapper delegates to the shared Bash runner; Windows has a native PowerShell implementation.</p>
+
+  <table class="tbl mt16">
+    <thead><tr><th style="width:22%">Entry point</th><th style="width:15%">Platform</th><th>Behaviour</th></tr></thead>
+    <tbody>
+      <tr><td class="k mono" style="font-size:13px">scripts/run.sh</td><td>Linux</td><td>Shared implementation: start, logs, status, seed, fix-db-password, stop, reset</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/run-macos.sh</td><td>macOS</td><td>Checks Docker Desktop and Python, then <span class="mono">exec</span>s the shared runner</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/run.ps1</td><td>Windows</td><td>Native PowerShell 5.1+: creates <span class="mono">.env</span> and the S3-mock override without Bash, Python or curl</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/run.cmd</td><td>Windows CMD</td><td>Launcher that runs <span class="mono">run.ps1</span> with <span class="mono">-ExecutionPolicy Bypass</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g2 mt16" style="gap:18px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>PowerShell 7.4.6 · exercised on Linux</span></div>
+      <pre><span class="p">PS&gt;</span> .\scripts\run.ps1 status
+NAME                     STATUS
+scrapeflow-api-1         Up (healthy)
+scrapeflow-worker-1      Up
+scrapeflow-web-1         Up (healthy)
+
+<span class="p">PS&gt;</span> .\scripts\run.ps1 fix-db-password
+==&gt; Starting PostgreSQL
+ALTER ROLE
+<span class="ok">role scrapeflow now matches DATABASE_URL</span></pre>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">What was verified</div>
+        <ul class="clean" style="margin-top:6px">
+          <li><span class="mono">bash -n</span> passes for both Bash scripts, including in a real Bash 3.2 container.</li>
+          <li>The macOS wrapper delegates correctly (run on Linux).</li>
+          <li>PowerShell: syntax, PSScriptAnalyzer (no errors), <span class="mono">status</span>, <span class="mono">fix-db-password</span>, <span class="mono">.env</span> generation (64-char secrets, mode 600, no BOM), fake-Docker start path.</li>
+          <li><span class="mono">.gitattributes</span> keeps shell/YAML LF and Windows launchers CRLF.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <p style="font-size:13.5px"><strong style="color:#0f172a">Honest limit:</strong> native Windows PowerShell 5.1 + Docker Desktop and native macOS execution were <strong>not available</strong> on this host. They remain UNVERIFIED; the scripts target those environments and the docs say so.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Cross-platform runners</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 33 QUALITY -->
+<section class="slide">
+  <p class="eyebrow">Quality gates</p>
+  <h2 class="title">322 Python tests, 30 web tests, zero lint or type errors</h2>
+  <p class="lead">Numbers below come from the final run recorded in <span class="mono">docs/presentation/evidence/</span>.</p>
+
+  <div class="grid g4 mt20" style="gap:14px">
+    <div class="card tight" style="border-top:4px solid #4f46e5"><div class="kpi"><span class="v">322</span><span class="l">Python tests passed</span></div></div>
+    <div class="card tight" style="border-top:4px solid #0891b2"><div class="kpi"><span class="v">83.08%</span><span class="l">Branch/line coverage</span></div></div>
+    <div class="card tight" style="border-top:4px solid #059669"><div class="kpi"><span class="v">30</span><span class="l">Vitest tests passed</span></div></div>
+    <div class="card tight" style="border-top:4px solid #d97706"><div class="kpi"><span class="v">0</span><span class="l">Lint / type errors</span></div></div>
+  </div>
+
+  <div class="grid g2 mt18" style="gap:18px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>python gates</span></div>
+      <pre><span class="dim2">$</span> uv run ruff check apps packages tests
+<span class="ok">All checks passed!</span>
+<span class="dim2">$</span> uv run ruff format --check apps packages tests
+<span class="ok">137 files already formatted</span>
+<span class="dim2">$</span> uv run mypy apps packages
+<span class="ok">Success: no issues found in 94 source files</span>
+<span class="dim2">$</span> uv run pytest -q --cov=apps --cov=packages
+Required test coverage of 70.0% reached.
+Total coverage: <span class="p">83.08%</span>
+<span class="ok">322 passed, 3 skipped</span> in 95.21s</pre>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Why 3 skips</div>
+        <ul class="clean" style="margin-top:6px">
+          <li><strong>Chrome binary test:</strong> <span class="mono">CHROME_BINARY</span> not set on this host; the Grid path is covered by an injected-driver unit test.</li>
+          <li><strong>Grid-only worker test:</strong> requires a live Selenium Grid browser.</li>
+          <li><strong>Locust import check:</strong> Locust is in the <span class="mono">e2e</span> group and not installed here.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12">
+        <div class="mini-title">Test shape</div>
+        <ul class="clean" style="margin-top:6px">
+          <li>39 Python test files: unit, integration, e2e and contract tests.</li>
+          <li>Integration tests run against real PostgreSQL and Redis in disposable containers.</li>
+          <li>Runner tests guard every platform entry point, so documentation cannot drift from scripts.</li>
+          <li>Compose regression tests assert the worker keeps the shared backend environment.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Quality metrics</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 34 VERIFIED VS UNVERIFIED -->
+<section class="slide">
+  <p class="eyebrow">Scope discipline</p>
+  <h2 class="title">What is proven, and what is still an assumption</h2>
+  <p class="lead">A production claim is only as good as the environment it ran in. This slide is deliberately split.</p>
+
+  <div class="grid g2 mt20" style="gap:20px;align-items:start">
+    <div class="card" style="border-top:4px solid #059669">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Verified on this host</h3><span class="pill ok">evidence</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li>Full dev Compose stack: 11 services, PostgreSQL/Redis/S3 mock healthy, migrations exit 0.</li>
+        <li>Real browser scrape through Selenium Grid: screenshot + HTML + JSON artifacts.</li>
+        <li>Artifact download through the API's presigned redirect.</li>
+        <li>JWT signup/login/refresh and the dashboard session.</li>
+        <li>Celery Beat scheduling, reaper, retention and worker metrics on 9101.</li>
+        <li>322 Python tests, Ruff, format and mypy; 30 Vitest tests, lint, typecheck, production build.</li>
+        <li>Playwright Chromium E2E: 5 passed, 2 skipped.</li>
+        <li>Runner scripts exercised: Bash 3.2 syntax, PowerShell 7.4.6 behaviour.</li>
+      </ul>
+    </div>
+
+    <div class="card" style="border-top:4px solid #b45309">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">Not verified here</h3><span class="pill warn">external dependency</span></div>
+      <div class="divider"></div>
+      <ul class="clean">
+        <li><strong>Live Stripe checkout/portal</strong> — no API keys or test account.</li>
+        <li><strong>Official MinIO image and lifecycle</strong> — the pinned tag returned 401; s3mock was used.</li>
+        <li><strong>Production Caddy topology</strong> — needs a real domain and DNS.</li>
+        <li><strong>Commercial proxy gateway</strong> — no upstream credentials.</li>
+        <li><strong>Real external webhook receiver</strong> — HMAC path is unit-tested only.</li>
+        <li><strong>Hosted GitHub Actions</strong> — workflow is config-validated, not run on GitHub.</li>
+        <li><strong>Locust capacity numbers</strong> — Locust not installed; profile shape tested only.</li>
+        <li><strong>Native Windows / macOS</strong> — scripts target them but were not executed there.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card tight mt14" style="border-left:4px solid #4f46e5">
+    <p style="font-size:14px"><strong style="color:#0f172a">Read this as:</strong> the application logic, security boundaries and integrations are implemented and tested locally. Anything that needs a paid or external service is clearly flagged — never presented as already working in production.</p>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Verified scope</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 35 ROADMAP -->
+<section class="slide">
+  <p class="eyebrow">Next steps</p>
+  <h2 class="title">From verified local platform to production service</h2>
+
+  <div class="grid g3 mt24" style="gap:16px">
+    <div class="card">
+      <span class="pill info">Now → 2 weeks</span>
+      <h3 style="margin-top:10px">Close the external gaps</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li>Stripe test-mode keys: checkout, portal, webhook replay.</li>
+        <li>Point artifacts at real MinIO or S3 with lifecycle rules.</li>
+        <li>Deploy Caddy on a staging domain and run the HTTPS journey.</li>
+        <li>Wire one real webhook receiver and verify HMAC + retries.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="pill info">2 → 6 weeks</span>
+      <h3 style="margin-top:10px">Prove capacity</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li>Run Locust against the queue with realistic selector payloads.</li>
+        <li>Measure browser concurrency limits per Grid node.</li>
+        <li>Add queue-depth autoscaling for workers.</li>
+        <li>Publish p50/p95 job duration and error budget.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="pill info">6+ weeks</span>
+      <h3 style="margin-top:10px">Product depth</h3>
+      <ul class="clean" style="margin-top:8px">
+        <li>Change detection and diff notifications on schedules.</li>
+        <li>Per-tenant proxy pools with health checks.</li>
+        <li>SDKs generated from the OpenAPI schema.</li>
+        <li>Team invitations and finer-grained roles.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g2 mt18" style="gap:18px;align-items:start">
+    <div class="card tight">
+      <div class="mini-title">Engineering guardrails already in place</div>
+      <ul class="clean" style="margin-top:6px">
+        <li>Every new dependency goes through <span class="mono">uv</span> or <span class="mono">npm</span> with a committed lockfile.</li>
+        <li>Every API change updates Pydantic schemas, and therefore OpenAPI.</li>
+        <li>Every platform script has a test that fails if the commands drift.</li>
+        <li>Unverified paths are recorded in the final report and this deck.</li>
+      </ul>
+    </div>
+    <div class="card tight" style="background:#0b1220;border-color:#1c2a45">
+      <div class="mini-title" style="color:#7f92b1">Success criteria for the next milestone</div>
+      <ul class="clean" style="margin-top:6px">
+        <li style="color:#c8d6ee">A paid test subscription completes end to end in Stripe test mode.</li>
+        <li style="color:#c8d6ee">A staging HTTPS deployment passes the same Playwright journey.</li>
+        <li style="color:#c8d6ee">A Locust run produces a documented throughput and latency curve.</li>
+        <li style="color:#c8d6ee">All three platforms run the stack natively at least once.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer"><span><span class="dot">●</span> Roadmap</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 36 CLOSING -->
+<section class="slide dark">
+  <div class="row" style="gap:14px">
+    <div class="logotile">SF</div>
+    <div>
+      <div style="font-size:13px;letter-spacing:2.4px;text-transform:uppercase;color:#8fa6ff;font-weight:800">Thank you</div>
+      <div style="font-size:13px;color:#7f92b1">ScrapeFlow · project and technology stack</div>
+    </div>
+  </div>
+
+  <h2 style="font-size:56px;line-height:1.04;letter-spacing:-2px;margin:40px 0 0;font-weight:900;max-width:1200px">
+    A scraping platform is a<br />
+    <span style="color:#9db2ff">queue, a boundary and a receipt.</span>
+  </h2>
+
+  <p class="lead" style="margin-top:20px;font-size:20px;max-width:1050px">
+    Queue the work so requests stay fast. Guard the boundary so user URLs cannot reach your network.
+    Keep a receipt — artifacts, hashes, events and metrics — so every job can be explained later.
+  </p>
+
+  <div class="grid g3 mt30" style="gap:16px;max-width:1250px">
+    <div class="card tight">
+      <div class="mini-title" style="color:#8fa6ff">Run it</div>
+      <div class="mono" style="font-size:13.5px;color:#dbe5f8;margin-top:6px;line-height:1.7">
+        ./scripts/run.sh<br>
+        ./scripts/run-macos.sh<br>
+        .\scripts\run.ps1
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="mini-title" style="color:#8fa6ff">Read it</div>
+      <div class="mono" style="font-size:13.5px;color:#dbe5f8;margin-top:6px;line-height:1.7">
+        SETUP.md<br>
+        docs/FINAL_REPORT.md<br>
+        docs/runbook.md
+      </div>
+    </div>
+    <div class="card tight">
+      <div class="mini-title" style="color:#8fa6ff">Verify it</div>
+      <div class="mono" style="font-size:13.5px;color:#dbe5f8;margin-top:6px;line-height:1.7">
+        uv run pytest -q<br>
+        npm test &amp;&amp; npm run build<br>
+        npm run e2e
+      </div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:64px;bottom:70px;font-size:13px;color:#7f92b1">
+    Repo: <span class="mono" style="color:#dbe5f8">web-scrapping-tool</span> · commit <span class="mono" style="color:#dbe5f8">0c6d96c</span> · 10 Nov 2026
+  </div>
+  <div class="footer"><span><span class="dot">●</span> ScrapeFlow · Full Project &amp; Technology Stack</span><span class="pagenum"></span></div>
+</section>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  slides.forEach((slide, index) => {
+    const number = slide.querySelector('.pagenum');
+    if (number) {
+      number.textContent = String(index + 1).padStart(2, '0') + ' / ' + slides.length;
+    }
+  });
+</script>
+</body>
+</html>
