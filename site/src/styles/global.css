@@ -514,6 +514,30 @@ a {
   font-size: 0.82rem;
 }
 
+.presentation-preview {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.presentation-preview .section-heading {
+  margin-bottom: 0;
+}
+
+.presentation-preview h2 {
+  margin: 0;
+}
+
+.pdf-frame {
+  display: block;
+  width: 100%;
+  height: min(78vh, 900px);
+  min-height: 480px;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
 .site-footer {
   border-top: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.7);
@@ -622,6 +646,11 @@ a {
 
   .resource-footnote {
     margin-top: -2.5rem;
+  }
+
+  .pdf-frame {
+    height: 70vh;
+    min-height: 360px;
   }
 
   .footer-inner {

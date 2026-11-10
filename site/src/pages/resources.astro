@@ -2,6 +2,8 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ResourceCard from "../components/ResourceCard.astro";
 import { projectResources } from "../data/resources";
+import presentationUrl from "../../../docs/presentation/ScrapeFlow-Project-Presentation.pdf";
+
 ---
 
 <BaseLayout
@@ -20,6 +22,28 @@ import { projectResources } from "../data/resources";
 
     <section class="resource-list" aria-label="Project resources">
       {projectResources.map((resource) => <ResourceCard resource={resource} />)}
+    </section>
+    <section class="presentation-preview" aria-labelledby="presentation-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Read it here</p>
+          <h2 id="presentation-heading">Project presentation</h2>
+        </div>
+        <a class="text-link" href={presentationUrl} target="_blank" rel="noreferrer">
+          Open full-size PDF <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <iframe
+        class="pdf-frame"
+        src={presentationUrl}
+        title="ScrapeFlow project presentation PDF preview"
+        loading="lazy"
+      >
+        <p>
+          Your browser cannot display embedded PDFs.
+          <a href={presentationUrl}>Open or download the presentation PDF</a>.
+        </p>
+      </iframe>
     </section>
     <p class="resource-footnote">
       Repository links use the configured GitHub repository during Pages builds. When running
