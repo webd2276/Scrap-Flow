@@ -6,7 +6,7 @@ described in `docs/analysis/04-plan.md`.
 
 > **New here?** The complete step-by-step guide — prerequisites, one-command
 > start, first scrape, configuration, production deployment, and GitHub
-> publishing — is [`../SETUP.md`](../SETUP.md).
+> publishing — is [`../SETUP.md`](./SETUP.md).
 
 **Status: Phase 10 complete — full-stack Compose verification and worker
 hardening.** All planned phases are implemented. The dev Compose stack was run
