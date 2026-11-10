@@ -535,14 +535,39 @@ STRIPE_PRICE_BUSINESS=
 a private network, set a random `METRICS_TOKEN`; requests must then send
 `Authorization: Bearer <token>`.
 
-### 7.7 Automated penetration testing (Strix)
+### 7.7 Automated penetration testing (Strix, optional)
 
-The repo ships an optional, advisory Strix integration: a manual GitHub Actions
-workflow plus per-platform runners for Linux (`scripts/security-scan.sh`), macOS
-(`scripts/security-scan-macos.sh`) and Windows
-(`scripts/security-scan.ps1` / `security-scan.cmd`). It needs `STRIX_LLM` and
-`LLM_API_KEY` and is never part of the PR gate. Setup, budget caps, and the
-safety rules are in [`docs/security/strix.md`](docs/security/strix.md).
+Strix is an autonomous AI pentester. It is **not required** to run ScrapeFlow,
+and it is never part of the pull-request gate: each scan needs an LLM key, costs
+money, and produces findings that a human must triage.
+
+Install once and export a provider key:
+
+```bash
+uv tool install strix-agent==1.7.0
+export STRIX_LLM="openrouter/z-ai/glm-5.3"
+export LLM_API_KEY="..."
+cd scrapeflow
+```
+
+Then use the entry point for your platform:
+
+| Platform | Source audit | Live API on `:8000` |
+| --- | --- | --- |
+| Linux | `./scripts/security-scan.sh` | `./scripts/security-scan.sh live` |
+| macOS | `./scripts/security-scan-macos.sh` | `./scripts/security-scan-macos.sh live` |
+| Windows PowerShell | `.\scripts\security-scan.ps1` | `.\scripts\security-scan.ps1 live` |
+| Windows CMD | `scripts\security-scan.cmd` | `scripts\security-scan.cmd live` |
+
+On Windows set `$env:STRIX_LLM` and `$env:LLM_API_KEY` before running. Source
+scans execute in a detached worktree at `HEAD`, so the agent cannot edit your
+working tree; live scans download `/openapi.json` and stay on localhost. Reports
+land in `scrapeflow/strix_runs/` and `strix view` opens the dashboard.
+
+For GitHub Actions, add repository secrets `STRIX_LLM` and `LLM_API_KEY`, then
+run the **Strix pentest** workflow manually from the Actions tab. Without the
+secrets the job skips with a warning instead of failing. Budget caps, exit codes
+and the safety rules are in [`docs/security/strix.md`](docs/security/strix.md).
 
 ---
 

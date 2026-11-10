@@ -2014,7 +2014,61 @@ Total coverage: <span class="p">83.08%</span>
   <div class="footer"><span><span class="dot">●</span> Quality metrics</span><span class="pagenum"></span></div>
 </section>
 
-<!-- 34 VERIFIED VS UNVERIFIED -->
+<!-- 34 STRIX -->
+<section class="slide">
+  <p class="eyebrow">Security · automated pentesting</p>
+  <h2 class="title">Strix adds offense without joining the PR gate</h2>
+  <p class="lead">An autonomous AI pentester runs on demand, on all three platforms, with a spend cap and a human triage step.</p>
+
+  <table class="tbl mt14">
+    <thead><tr><th style="width:27%">Surface</th><th style="width:16%">Platform</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td class="k mono" style="font-size:13px">.github/workflows/strix.yml</td><td>GitHub Actions</td><td>Manual scan with pinned <span class="mono">strix-agent 1.7.0</span>, severity gate, budget cap and report artifact</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/security-scan.sh</td><td>Linux</td><td>Source audit in a detached worktree, or a live scan of <span class="mono">:8000</span> driven by OpenAPI</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/security-scan-macos.sh</td><td>macOS</td><td>Docker Desktop and daemon checks, then delegates to the shared script</td></tr>
+      <tr><td class="k mono" style="font-size:13px">scripts/security-scan.ps1 · .cmd</td><td>Windows</td><td>PowerShell 5.1 runner with the same worktree, OpenAPI and exit-code contract</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g2 mt14" style="gap:16px;align-items:start">
+    <div class="term">
+      <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>one flow · three entry points</span></div>
+      <pre><span class="dim2"># source audit, or a live scan of the running API</span>
+<span class="dim2">$</span> export STRIX_LLM=openrouter/z-ai/glm-5.3
+<span class="dim2">$</span> export LLM_API_KEY=...
+<span class="dim2">$</span> cd scrapeflow &amp;&amp; ./scripts/security-scan.sh live
+<span class="dim2">$</span> ./scripts/security-scan-macos.sh code
+<span class="p">PS&gt;</span> .\scripts\security-scan.ps1 live
+<span class="dim2"># exit codes: 0 clean, 1 fatal, 2 findings</span>
+<span class="dim2"># reports: strix_runs/; CI uploads the same folder</span>
+<span class="dim2">$</span> strix view   <span class="dim2"># findings dashboard</span></pre>
+    </div>
+
+    <div>
+      <div class="card tight">
+        <div class="mini-title">Isolation, not convenience</div>
+        <ul class="clean" style="margin-top:6px">
+          <li>Source scans run in a detached worktree at <span class="mono">HEAD</span>; the agent never edits your working tree.</li>
+          <li>Live scans stay on <span class="mono">127.0.0.1</span> with the generated OpenAPI schema as the map.</li>
+          <li><span class="mono">$10</span> budget and <span class="mono">300</span> turns per agent by default.</li>
+        </ul>
+      </div>
+      <div class="card tight mt12" style="border-left:4px solid #b45309">
+        <div class="mini-title">Advisory by design — and honest</div>
+        <ul class="clean" style="margin-top:6px">
+          <li>Not in the PR gate: LLM cost, runtime and triage effort do not belong on every commit.</li>
+          <li>Missing secrets skip the job with a warning instead of failing.</li>
+          <li>Findings are hypotheses until reproduced. No real scan has run here yet, so it stays <strong>UNVERIFIED</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway"><span class="lbl">In short</span><p>Offense is a separate lane: same entry points as the stack, explicit budget, and no green claim until a real scan runs.</p></div>
+  <div class="footer"><span><span class="dot">●</span> Strix security scanning</span><span class="pagenum"></span></div>
+</section>
+
+<!-- 35 VERIFIED VS UNVERIFIED -->
 <section class="slide">
   <p class="eyebrow">Scope discipline</p>
   <h2 class="title">What is proven, and what is still an assumption</h2>
@@ -2032,7 +2086,7 @@ Total coverage: <span class="p">83.08%</span>
         <li>Celery Beat scheduling, reaper, retention and worker metrics on 9101.</li>
         <li>322 Python tests, Ruff, format and mypy; 30 Vitest tests, lint, typecheck, production build.</li>
         <li>Playwright Chromium E2E: 5 passed, 2 skipped.</li>
-        <li>Runner scripts exercised: Bash 3.2 syntax, PowerShell 7.4.6 behaviour.</li>
+        <li>Runner scripts exercised: Bash 3.2 syntax, PowerShell 7.4.6 behaviour; Strix CLI 1.7.0 installs and accepts the same flags.</li>
       </ul>
     </div>
 
@@ -2048,6 +2102,7 @@ Total coverage: <span class="p">83.08%</span>
         <li><strong>Hosted GitHub Actions</strong> — workflow is config-validated, not run on GitHub.</li>
         <li><strong>Locust capacity numbers</strong> — Locust not installed; profile shape tested only.</li>
         <li><strong>Native Windows / macOS</strong> — scripts target them but were not executed there.</li>
+        <li><strong>Strix pentest run</strong> — no LLM key; workflow and runners are wired, never executed against the stack.</li>
       </ul>
     </div>
   </div>
@@ -2060,7 +2115,7 @@ Total coverage: <span class="p">83.08%</span>
   <div class="footer"><span><span class="dot">●</span> Verified scope</span><span class="pagenum"></span></div>
 </section>
 
-<!-- 35 ROADMAP -->
+<!-- 36 ROADMAP -->
 <section class="slide">
   <p class="eyebrow">Next steps</p>
   <h2 class="title">From verified local platform to production service</h2>
@@ -2123,7 +2178,7 @@ Total coverage: <span class="p">83.08%</span>
   <div class="footer"><span><span class="dot">●</span> Roadmap</span><span class="pagenum"></span></div>
 </section>
 
-<!-- 36 CLOSING -->
+<!-- 37 CLOSING -->
 <section class="slide dark">
   <div class="row" style="gap:14px">
     <div class="logotile">SF</div>

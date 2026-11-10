@@ -52,8 +52,9 @@ TAKEAWAYS: dict[int, str] = {
     31: "Production changes the edge, not the application: same images, Caddy in front, no dev ports.",
     32: "The platform is a first-class target, not a footnote in the README.",
     33: "Every skip is documented with a reason. A green run without that context would be misleading.",
-    34: "The left column is evidence. The right column is a to-do list that needs external services.",
-    35: "The next milestone is not more features — it is proving the external paths and the capacity curve.",
+    34: "Offense is a separate lane: same entry points as the stack, explicit budget, and no green claim until a real scan runs.",
+    35: "The left column is evidence. The right column is a to-do list that needs external services.",
+    36: "The next milestone is not more features — it is proving the external paths and the capacity curve.",
 }
 
 
@@ -61,7 +62,7 @@ def build() -> None:
     html = "".join((SRC / part).read_text(encoding="utf-8") for part in PARTS)
 
     chunks = html.split('<div class="footer">')
-    if len(chunks) != 37:
+    if len(chunks) != 38:
         raise SystemExit(f"expected 36 slides, found {len(chunks) - 1} footers")
 
     assembled = [chunks[0]]

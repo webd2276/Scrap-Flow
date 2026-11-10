@@ -1,11 +1,12 @@
 # ScrapeFlow — project presentation
 
-A 36-slide, 16:9 deck that walks through the whole ScrapeFlow project: product,
+A 37-slide, 16:9 deck that walks through the whole ScrapeFlow project: product,
 architecture, languages, package managers, backend libraries, frontend libraries,
-live artifacts, quality gates and the honestly-unverified external paths.
+live artifacts, quality gates, the Strix security-scanning integration and the
+honestly-unverified external paths.
 
 **Deliverable:** [`ScrapeFlow-Project-Presentation.pdf`](ScrapeFlow-Project-Presentation.pdf)
-(36 pages, 1200 × 675 pt).
+(37 pages, 1200 × 675 pt).
 
 ## Layout
 
@@ -45,7 +46,7 @@ await page.pdf({
 await browser.close();
 ```
 
-`build.py` aborts if the fragment count no longer matches 36 slides, so a lost
+`build.py` aborts if the fragment count no longer matches 37 slides, so a lost
 slide fails the build instead of shipping a short deck.
 
 ## Provenance of the artifacts
@@ -64,4 +65,6 @@ Live Stripe checkout, the official MinIO image and lifecycle rules, the Caddy
 production topology, a commercial proxy gateway, a real external webhook
 receiver, hosted GitHub Actions and a real Locust capacity run were not available
 in this environment. The deck labels those paths as unverified rather than
-presenting them as proven.
+presenting them as proven. The same applies to the Strix pentest integration:
+the workflow and all three runners are committed and tested, but no scan has run
+without an LLM key.
