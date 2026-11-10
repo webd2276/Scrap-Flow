@@ -1,0 +1,57 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import HighlightCard from "../components/HighlightCard.astro";
+import { projectHighlights } from "../data/project-highlights";
+import { siteBase } from "../data/site-path";
+
+---
+
+<BaseLayout
+  title="Overview"
+  description="A clear overview of ScrapeFlow's documented capabilities and local verification evidence."
+>
+  <div class="container page-stack">
+    <section class="hero">
+      <p class="hero-kicker">Scraping · Automation · Observability</p>
+      <h1>Make web data work<br class="desktop-break" /> at scale.</h1>
+      <p class="hero-copy">
+        ScrapeFlow is a multi-tenant platform for reliable web scraping and browser automation,
+        built around durable jobs, controlled execution, and clear operational signals.
+      </p>
+      <div class="hero-actions">
+        <a class="button button-light" href={`${siteBase}project/`}>Explore the project <span aria-hidden="true">→</span></a>
+        <a class="button button-quiet" href={`${siteBase}resources/`}>Browse resources</a>
+      </div>
+      <span class="hero-orbit orbit-one" aria-hidden="true"></span>
+      <span class="hero-orbit orbit-two" aria-hidden="true"></span>
+    </section>
+
+    <section aria-labelledby="evidence-heading" class="section-block">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">A snapshot, not a promise</p>
+          <h2 id="evidence-heading">Project report highlights</h2>
+        </div>
+        <p class="section-intro">
+          Locally reported verification evidence from the final report dated November 8, 2026.
+        </p>
+      </div>
+      <div class="highlight-grid">
+        {projectHighlights.map((highlight) => <HighlightCard highlight={highlight} />)}
+      </div>
+      <p class="note">
+        <span aria-hidden="true">ⓘ</span>
+        These are documented local results. They do not indicate that a hosted GitHub Actions run
+        or a public deployment has succeeded.
+      </p>
+    </section>
+
+    <section class="closing-band">
+      <div>
+        <p class="eyebrow">Built for dependable workflows</p>
+        <h2>From queued work to browser-driven results.</h2>
+      </div>
+      <a class="text-link" href={`${siteBase}project/`}>See how it fits together <span aria-hidden="true">→</span></a>
+    </section>
+  </div>
+</BaseLayout>

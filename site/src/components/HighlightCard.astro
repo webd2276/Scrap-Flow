@@ -1,0 +1,18 @@
+---
+import type { ProjectHighlight } from "../data/project-highlights";
+
+interface Props {
+  highlight: ProjectHighlight;
+}
+
+const { highlight } = Astro.props;
+---
+
+<article class="highlight-card">
+  <p class="eyebrow">{highlight.label}</p>
+  <h3>{highlight.value}</h3>
+  <p class="card-context">{highlight.context}</p>
+  <span class:list={["status", highlight.status === "Unverified" ? "status-warning" : ""]}>
+    {highlight.status}
+  </span>
+</article>

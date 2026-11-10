@@ -52,15 +52,15 @@ async def fetch_url(
 ) -> FetchResult:
     await _check_cancelled(cancel_check)
     current = await validate_url(url, policy, resolver)
+    initial_origin = current.origin
     chain: list[str] = []
     timeout = httpx.Timeout(timeout_seconds, connect=min(10.0, timeout_seconds))
 
-    request_headers = {
+    default_headers = {
         "User-Agent": user_agent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "gzip, deflate",
-        **(headers or {}),
     }
 
     async with httpx.AsyncClient(
@@ -68,12 +68,13 @@ async def fetch_url(
         timeout=timeout,
         follow_redirects=False,
         trust_env=False,
-        headers=request_headers,
+        headers=default_headers,
     ) as client:
         for _ in range(max_redirects + 1):
             await _check_cancelled(cancel_check)
             try:
-                async with client.stream("GET", current.url) as response:
+                request_headers = headers if current.origin == initial_origin else None
+                async with client.stream("GET", current.url, headers=request_headers) as response:
                     if response.headers.get("x-scrapeflow-proxy-error") == "1":
                         body = await response.aread()
                         message = body.decode("utf-8", "replace")[:300]

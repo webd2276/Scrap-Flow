@@ -1,0 +1,29 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import ResourceCard from "../components/ResourceCard.astro";
+import { projectResources } from "../data/resources";
+---
+
+<BaseLayout
+  title="Resources"
+  description="Links to ScrapeFlow's repository documentation and existing project presentation."
+>
+  <div class="container page-stack">
+    <section class="page-intro resources-intro">
+      <p class="eyebrow">Continue exploring</p>
+      <h1>Resources for the<br class="desktop-break" /> curious and the careful.</h1>
+      <p>
+        Go directly to the repository's existing project documents and presentation. Setup and
+        operational details remain in their original sources.
+      </p>
+    </section>
+
+    <section class="resource-list" aria-label="Project resources">
+      {projectResources.map((resource) => <ResourceCard resource={resource} />)}
+    </section>
+    <p class="resource-footnote">
+      Repository links use the configured GitHub repository during Pages builds. When running
+      locally without repository configuration, links open GitHub code search.
+    </p>
+  </div>
+</BaseLayout>

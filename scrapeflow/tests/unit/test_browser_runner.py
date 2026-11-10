@@ -117,6 +117,7 @@ def test_browser_options_clamp_and_flags() -> None:
     assert "--headless=new" in arguments
     assert "--no-sandbox" in arguments
     assert "--proxy-server=http://egress-proxy:8080" in arguments
+    assert "--proxy-bypass-list=<-loopback>" in arguments
     assert any("MAP * ~NOTFOUND" in argument for argument in arguments)
     assert any("EXCLUDE egress-proxy" in argument for argument in arguments)
     assert chrome.capabilities["pageLoadStrategy"] == "normal"

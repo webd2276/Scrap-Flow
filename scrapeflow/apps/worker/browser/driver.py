@@ -49,9 +49,11 @@ def build_chrome_options(options: BrowserOptions) -> Options:
     chrome.add_argument("--safebrowsing-disable-auto-update")
     chrome.add_argument(f"--window-size={options.window_width},{options.window_height}")
     chrome.add_argument(f"--proxy-server={options.proxy_url}")
+    chrome.add_argument("--proxy-bypass-list=<-loopback>")
     # Force all hostnames through the validating proxy (which resolves and
     # pins the address) instead of letting Chrome resolve DNS itself. The
-    # proxy hostname itself must stay resolvable for Chrome to reach it.
+    # proxy hostname itself must stay resolvable for Chrome to reach it. Remove
+    # Chrome's implicit loopback bypass so local destinations reach that proxy.
     proxy_host = urlsplit(options.proxy_url).hostname or ""
     if proxy_host:
         chrome.add_argument(f"--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE {proxy_host}")

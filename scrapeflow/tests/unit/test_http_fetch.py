@@ -10,16 +10,28 @@ from packages.core.errors import AppError, ErrorCode
 from packages.core.ssrf import SSRFPolicy
 
 PORT: dict[str, int] = {}
+CAPTURED_HEADERS: dict[str, dict[str, str]] = {}
 
 
 async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
     try:
         head = await reader.readuntil(b"\r\n\r\n")
         target = head.split(b" ")[1]
+        request_headers = {
+            name.decode().lower(): value.decode().strip()
+            for name, value in (
+                line.split(b":", 1) for line in head.split(b"\r\n")[1:] if b":" in line
+            )
+        }
+        CAPTURED_HEADERS[target.decode()] = request_headers
         port = PORT["port"]
         if target == b"/redirect-private":
             status = b"302 Found"
             headers = f"Location: http://127.0.0.1:{port}/private\r\n".encode()
+            body = b""
+        elif target == b"/redirect-cross-origin":
+            status = b"302 Found"
+            headers = f"Location: http://other.test:{port}/capture\r\n".encode()
             body = b""
         elif target == b"/redirect":
             status = b"302 Found"
@@ -66,7 +78,7 @@ async def proxy() -> AsyncIterator[str]:
     PORT["port"] = port
     policy = SSRFPolicy(
         allowed_ports=frozenset({80, port}),
-        allowed_private_hosts=frozenset({"public.test"}),
+        allowed_private_hosts=frozenset({"public.test", "other.test"}),
     )
     instance = EgressProxy(ProxyConfig(policy=policy, resolver=_resolver))
     await instance.start()
@@ -81,7 +93,7 @@ async def proxy() -> AsyncIterator[str]:
 def _policy() -> SSRFPolicy:
     return SSRFPolicy(
         allowed_ports=frozenset({80, PORT["port"]}),
-        allowed_private_hosts=frozenset({"public.test"}),
+        allowed_private_hosts=frozenset({"public.test", "other.test"}),
     )
 
 
@@ -110,10 +122,35 @@ async def test_fetch_returns_body_through_proxy(proxy: str) -> None:
 
 
 async def test_relative_redirect_is_followed(proxy: str) -> None:
-    result = await _fetch(proxy, "/redirect")
+    CAPTURED_HEADERS.clear()
+    result = await _fetch(proxy, "/redirect", headers={"X-Test": "same-origin"})
     assert result.status_code == 200  # type: ignore[attr-defined]
     assert b"Fetched" in result.content
     assert result.redirects
+    assert CAPTURED_HEADERS["/redirect"]["x-test"] == "same-origin"
+    assert CAPTURED_HEADERS["/final"]["x-test"] == "same-origin"
+
+
+async def test_custom_headers_are_not_forwarded_across_origins(proxy: str) -> None:
+    CAPTURED_HEADERS.clear()
+    result = await _fetch(
+        proxy,
+        "/redirect-cross-origin",
+        headers={
+            "Authorization": "Bearer test-token",
+            "Cookie": "session=secret",
+            "X-Api-Key": "private",
+        },
+    )
+    assert result.status_code == 200  # type: ignore[attr-defined]
+    original_headers = CAPTURED_HEADERS["/redirect-cross-origin"]
+    redirected_headers = CAPTURED_HEADERS["/capture"]
+    assert original_headers["authorization"] == "Bearer test-token"
+    assert original_headers["cookie"] == "session=secret"
+    assert original_headers["x-api-key"] == "private"
+    assert "authorization" not in redirected_headers
+    assert "cookie" not in redirected_headers
+    assert "x-api-key" not in redirected_headers
 
 
 async def test_redirect_to_private_address_is_rejected(proxy: str) -> None:

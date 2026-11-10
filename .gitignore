@@ -10,6 +10,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+site/node_modules/
+site/dist/
+site/.astro/
 
 # Strix pentest runs and scratch worktrees
 strix_runs/

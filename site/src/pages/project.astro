@@ -1,0 +1,55 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { platformAreas } from "../data/project-highlights";
+---
+
+<BaseLayout
+  title="Project"
+  description="The documented ScrapeFlow platform components and their responsibilities."
+>
+  <div class="container page-stack">
+    <section class="page-intro">
+      <p class="eyebrow">The platform</p>
+      <h1>One workflow,<br class="desktop-break" /> purpose-built components.</h1>
+      <p>
+        ScrapeFlow separates job coordination from execution, pairing an API control plane with
+        queued workers and a dedicated browser path.
+      </p>
+    </section>
+
+    <section class="platform-layout" aria-labelledby="platform-heading">
+      <div class="platform-aside">
+        <p class="eyebrow">System map</p>
+        <h2 id="platform-heading">A clear path from request to result.</h2>
+        <p>
+          These capabilities are summarized from the project report. This page is an overview,
+          not an operational guide.
+        </p>
+      </div>
+      <div class="platform-grid">
+        {
+          platformAreas.map(({ area, technology, summary, status }, index) => (
+            <article class="platform-card">
+              <span class="step-number">0{index + 1}</span>
+              <p class="eyebrow">{area}</p>
+              <h3>{technology}</h3>
+              <p>{summary}</p>
+              <span class="status">{status}</span>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <aside class="callout">
+      <span class="callout-mark" aria-hidden="true">↗</span>
+      <div>
+        <h2>Designed with boundaries in mind</h2>
+        <p>
+          The documented architecture keeps browser execution in workers and routes outbound
+          requests through a validating egress path. See the repository report for source detail.
+        </p>
+      </div>
+    </aside>
+  </div>
+</BaseLayout>

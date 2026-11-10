@@ -1,0 +1,43 @@
+---
+import { siteBase } from "../data/site-path";
+
+const currentPath = Astro.url.pathname.replace(/\/+$/, "") || "/";
+const navigation = [
+  { label: "Overview", path: "/" },
+  { label: "Project", path: "/project/" },
+  { label: "Resources", path: "/resources/" },
+];
+---
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href={siteBase} aria-label="ScrapeFlow home">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span>ScrapeFlow</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <ul>
+        {
+          navigation.map(({ label, path }) => {
+            const href = path === "/" ? siteBase : `${siteBase}${path.slice(1)}`;
+            const isCurrent =
+              path === "/"
+                ? currentPath === siteBase.replace(/\/+$/, "") || currentPath === "/"
+                : currentPath === `${siteBase.replace(/\/+$/, "")}${path.replace(/\/+$/, "")}`;
+            return (
+              <li>
+                <a
+                  href={href}
+                  aria-current={isCurrent ? "page" : undefined}
+                  class:list={{ active: isCurrent }}
+                >
+                  {label}
+                </a>
+              </li>
+            );
+          })
+        }
+      </ul>
+    </nav>
+  </div>
+</header>
