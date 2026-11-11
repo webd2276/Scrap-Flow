@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="ScrapeFlow is a production-shaped, multi-tenant web scraping and browser-automation platform: durable job queue, real headless browser path, SSRF-safe egress, tenant isolation and artifact storage."
+    />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="author" content="ScrapeFlow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ScrapeFlow" />
+    <meta
+      property="og:title"
+      content="ScrapeFlow — multi-tenant web scraping & browser automation"
+    />
+    <meta
+      property="og:description"
+      content="Durable job queue, real headless browser path, SSRF-safe egress, tenant isolation and artifact storage. FastAPI + Celery + Selenium Grid + Next.js."
+    />
+    <meta property="og:image" content="./og-cover.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="ScrapeFlow — multi-tenant web scraping & browser automation"
+    />
+    <meta
+      name="twitter:description"
+      content="Durable job queue, real headless browser path, SSRF-safe egress, tenant isolation and artifact storage."
+    />
+    <meta name="twitter:image" content="./og-cover.png" />
+
+    <title>ScrapeFlow — Multi-tenant web scraping &amp; browser automation</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./favicon.svg" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <script>
+      // Apply the saved theme before first paint so the page never flashes.
+      (function () {
+        try {
+          var stored = localStorage.getItem("sf-theme");
+          var theme = stored === "light" || stored === "dark" ? stored : "dark";
+          document.documentElement.classList.toggle("dark", theme === "dark");
+          document.documentElement.style.colorScheme = theme;
+        } catch (error) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
